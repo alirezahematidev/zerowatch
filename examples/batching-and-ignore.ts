@@ -1,7 +1,7 @@
 /**
  * Batching (arrays per window), debouncing, .gitignore and extension filters.
  */
-import { watch } from "watchx";
+import { watch } from "zerowatch";
 
 const watcher = watch("src", {
   recursive: true,

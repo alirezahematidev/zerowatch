@@ -1,5 +1,5 @@
 {
-  "name": "watchx",
+  "name": "zerowatch",
   "version": "0.1.0",
   "description": "A modern, dual ESM/CommonJS, zero-dependency file watcher for Node.js — a successor to chokidar with async iterators, promises, and typed events.",
   "type": "module",
@@ -35,6 +35,7 @@
     "dev": "tsup --watch",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "typecheck": "tsc --noEmit",
+    "attw": "attw --pack .",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -55,13 +56,16 @@
     "typescript"
   ],
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
     "@release-it/conventional-changelog": "^11.0.1",
     "@types/node": "^22.10.0",
-    "@vitest/coverage-v8": "^2.1.0",
+    "@vitest/coverage-v8": "4.1.10",
     "chokidar": "^5.0.0",
     "release-it": "^20.2.1",
+    "tinybench": "^6.0.2",
     "tsup": "^8.5.1",
     "typescript": "^5.7.0",
-    "vitest": "^2.1.0"
+    "vite": "^8.1.4",
+    "vitest": "4.1.10"
   }
 }

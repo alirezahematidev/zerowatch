@@ -12,7 +12,10 @@ generated from [Conventional Commits](https://www.conventionalcommits.org/) via
 
 - Dual **ESM + CommonJS** builds — `import` and `require` both supported.
 - `getWatched()`, `add()`, and `unwatch()` for live watcher management.
-- `usePolling` / `interval` polling backend for network filesystems.
+- `usePolling` / `interval` polling backend for network filesystems, with a
+  separate `binaryInterval` / `binaryExtensions` cadence for large assets.
+- `depth` to cap recursion; `maxBufferedEvents` for async-iterator backpressure.
+- `hashChanges` content-hash fallback for size/mtime/ctime-identical edits.
 - Configurable `moveWindow`; `flushOnClose` to drain buffered events on close.
 - `awaitWrite` now settles on size **and** mtime; symlink-cycle protection in the
   scanner; nested brace-expansion in ignore globs.
@@ -25,4 +28,5 @@ generated from [Conventional Commits](https://www.conventionalcommits.org/) via
 
 ### Build System
 
-- Bundled with **tsup** (minified, ~19 KB/format — down from ~124 KB).
+- Bundled with **tsup** (minified, ~21 KB/format — down from ~124 KB).
+- Benchmarks rewritten on **tinybench** (warmup + multi-sample statistics).

@@ -1,3 +1,11 @@
+/** Backpressure configuration for {@link AsyncQueue}. */
+export interface AsyncQueueOptions<T> {
+  /** Max values buffered for a slow consumer; `0` (default) means unbounded. */
+  readonly maxBuffered?: number;
+  /** Called with each value dropped once the buffer is full. */
+  readonly onDrop?: (value: T) => void;
+}
+
 /**
  * A single-consumer async queue backing `Symbol.asyncIterator`.
  *
@@ -5,6 +13,10 @@
  * (optionally with an error) to terminate the stream. A consumer drives it via
  * the standard async-iterator protocol. Values pushed while no consumer is
  * waiting are buffered so nothing is lost between `await` turns.
+ *
+ * With `maxBuffered` set, the buffer is bounded: once it is full the oldest
+ * value is dropped (and reported via `onDrop`) to bound memory when a consumer
+ * cannot keep up.
  */
 export class AsyncQueue<T> implements AsyncIterableIterator<T> {
   readonly #buffer: T[] = [];
@@ -14,6 +26,13 @@ export class AsyncQueue<T> implements AsyncIterableIterator<T> {
   }> = [];
   #ended = false;
   #error: unknown = undefined;
+  readonly #maxBuffered: number;
+  readonly #onDrop: ((value: T) => void) | undefined;
+
+  constructor(options: AsyncQueueOptions<T> = {}) {
+    this.#maxBuffered = Math.max(0, options.maxBuffered ?? 0);
+    this.#onDrop = options.onDrop;
+  }
 
   /** Enqueue a value, waking the pending consumer if one is waiting. */
   push(value: T): void {
@@ -23,6 +42,11 @@ export class AsyncQueue<T> implements AsyncIterableIterator<T> {
       waiter.resolve({ value, done: false });
     } else {
       this.#buffer.push(value);
+      // Bounded buffer: drop the oldest value(s) once over the high-water mark.
+      while (this.#maxBuffered > 0 && this.#buffer.length > this.#maxBuffered) {
+        const dropped = this.#buffer.shift() as T;
+        this.#onDrop?.(dropped);
+      }
     }
   }
 

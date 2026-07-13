@@ -1,6 +1,6 @@
 # Migrating from chokidar
 
-`watchx` is not a drop-in replacement — it deliberately offers a modern API. This guide maps common chokidar patterns to their `watchx` equivalents.
+`zerowatch` is not a drop-in replacement — it deliberately offers a modern API. This guide maps common chokidar patterns to their `zerowatch` equivalents.
 
 ## Creating a watcher
 
@@ -11,18 +11,18 @@ const chokidar = require("chokidar");
 const watcher = chokidar.watch("src", { ignoreInitial: true });
 ```
 
-**watchx**
+**zerowatch**
 
 ```ts
-import { watch } from "watchx";
+import { watch } from "zerowatch";
 const watcher = watch("src", { ignoreInitial: true });
 ```
 
 ## Events
 
-chokidar emits `add`, `change`, `unlink`, `addDir`, `unlinkDir` (and `all`). `watchx` normalizes everything to four types, and distinguishes files vs directories via `event.isDirectory`.
+chokidar emits `add`, `change`, `unlink`, `addDir`, `unlinkDir` (and `all`). `zerowatch` normalizes everything to four types, and distinguishes files vs directories via `event.isDirectory`.
 
-| chokidar | watchx |
+| chokidar | zerowatch |
 | --- | --- |
 | `add` | `create` (file) |
 | `addDir` | `create` (`isDirectory: true`) |
@@ -43,7 +43,7 @@ watcher
   .on("unlink", (path) => {});
 ```
 
-**watchx**
+**zerowatch**
 
 ```ts
 watcher
@@ -62,7 +62,7 @@ Note listeners now receive a rich `WatchEvent` object rather than a bare path st
 watcher.on("ready", () => console.log("ready"));
 ```
 
-**watchx**
+**zerowatch**
 
 ```ts
 await watcher.ready();
@@ -71,7 +71,7 @@ console.log("ready");
 
 ## Consuming events as a stream
 
-`watchx`'s headline feature — no analog in chokidar:
+`zerowatch`'s headline feature — no analog in chokidar:
 
 ```ts
 for await (const event of watch("src")) {
@@ -81,7 +81,7 @@ for await (const event of watch("src")) {
 
 ## Options mapping
 
-| chokidar | watchx |
+| chokidar | zerowatch |
 | --- | --- |
 | `ignored` | `ignore` (globs **and/or** predicate functions) |
 | `ignoreInitial` | `ignoreInitial` |
@@ -97,7 +97,7 @@ for await (const event of watch("src")) {
 
 ### `ignored`
 
-chokidar accepts globs, regexes and functions. `watchx` accepts glob strings and predicate functions:
+chokidar accepts globs, regexes and functions. `zerowatch` accepts glob strings and predicate functions:
 
 **chokidar**
 
@@ -105,7 +105,7 @@ chokidar accepts globs, regexes and functions. `watchx` accepts glob strings and
 chokidar.watch("src", { ignored: /(^|[/\\])\../ }); // dotfiles
 ```
 
-**watchx**
+**zerowatch**
 
 ```ts
 watch("src", { ignore: (_abs, rel) => rel.split("/").some((s) => s.startsWith(".")) });
@@ -119,7 +119,7 @@ watch("src", { ignore: (_abs, rel) => rel.split("/").some((s) => s.startsWith(".
 chokidar.watch("up", { awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 50 } });
 ```
 
-**watchx**
+**zerowatch**
 
 ```ts
 watch("up", { awaitWrite: { stabilityThreshold: 200, pollInterval: 50 } });
@@ -133,7 +133,7 @@ watch("up", { awaitWrite: { stabilityThreshold: 200, pollInterval: 50 } });
 await watcher.close();
 ```
 
-**watchx** — identical:
+**zerowatch** — identical:
 
 ```ts
 await watcher.close();
@@ -142,6 +142,6 @@ await watcher.close();
 ## Things that are intentionally different
 
 - **No `getWatched()`** — inspect via your own `all` listener state.
-- **No polling mode** — `watchx` relies on native `fs.watch`; Linux uses one handle per directory.
+- **No polling mode** — `zerowatch` relies on native `fs.watch`; Linux uses one handle per directory.
 - **Paths are objects, not strings** — every callback receives a `WatchEvent`.
 - **Batching & debouncing are first-class** — no need for userland wrappers.

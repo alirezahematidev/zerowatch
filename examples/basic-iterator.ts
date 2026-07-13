@@ -3,7 +3,7 @@
  *
  *   node --experimental-strip-types examples/basic-iterator.ts ./src
  */
-import { watch } from "watchx";
+import { watch } from "zerowatch";
 
 const target = process.argv[2] ?? "src";
 

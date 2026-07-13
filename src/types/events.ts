@@ -1,5 +1,5 @@
 /**
- * The normalized set of filesystem event types emitted by watchx.
+ * The normalized set of filesystem event types emitted by zerowatch.
  *
  * All platform-specific native events are reduced to exactly these four kinds.
  */

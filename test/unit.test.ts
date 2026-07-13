@@ -96,6 +96,20 @@ describe("AsyncQueue", () => {
     q.end(new Error("stream failed"));
     await expect(q.next()).rejects.toThrow("stream failed");
   });
+
+  it("bounds the buffer and drops the oldest when a consumer lags", async () => {
+    const dropped: number[] = [];
+    const q = new AsyncQueue<number>({ maxBuffered: 2, onDrop: (v) => dropped.push(v) });
+    q.push(1);
+    q.push(2);
+    q.push(3); // over the high-water mark -> drop oldest (1)
+    q.push(4); // drop 2
+    q.end();
+    const out: number[] = [];
+    for await (const v of q) out.push(v);
+    expect(out).toEqual([3, 4]);
+    expect(dropped).toEqual([1, 2]);
+  });
 });
 
 describe("Debouncer", () => {

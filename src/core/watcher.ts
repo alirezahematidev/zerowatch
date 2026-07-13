@@ -50,7 +50,7 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
   readonly #now: () => number;
 
   readonly #emitter = new WatcherInternalEmitter();
-  readonly #queue = new AsyncQueue<EmittedUnit>();
+  readonly #queue: AsyncQueue<EmittedUnit>;
   readonly #snapshot = new Map<string, FsEntry>();
 
   #ignore!: IgnoreEngine;
@@ -77,12 +77,15 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
   constructor(paths: string | string[], options: WatchOptions = {}, now: () => number = Date.now) {
     this.#targets = Array.isArray(paths) ? [...paths] : [paths];
     if (this.#targets.length === 0) {
-      throw new TypeError("watchx: at least one path is required");
+      throw new TypeError("zerowatch: at least one path is required");
     }
     this.#now = now;
     const cwd = options.cwd ?? process.cwd();
     this.#options = resolveOptions(options, cwd);
     this.#root = this.#computeRoot();
+    this.#queue = new AsyncQueue<EmittedUnit>({
+      maxBuffered: this.#options.maxBufferedEvents,
+    });
 
     this.#readyPromise = new Promise<void>((resolve, reject) => {
       this.#resolveReady = resolve;
@@ -244,6 +247,7 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
       this.#ignore,
       this.#factory,
       this.#options.followSymlinks,
+      this.#options.hashChanges,
     );
     this.#moveDetector = new MoveDetector(
       this.#options.moveWindow,
@@ -310,11 +314,33 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
     const platform = createPlatformWatcher(
       target,
       this.#sink,
-      (dir) => !this.#ignore.ignoresDirectory(dir),
-      { usePolling: this.#options.usePolling, interval: this.#options.interval },
+      (dir) => !this.#ignore.ignoresDirectory(dir) && this.#canDescend(dir),
+      {
+        usePolling: this.#options.usePolling,
+        interval: this.#options.interval,
+        binaryInterval: this.#options.binaryInterval,
+        binaryExtensions: this.#options.binaryExtensions,
+      },
     );
     this.#watchers.set(target.absolutePath, platform);
     await platform.start();
+  }
+
+  /** Depth of `abs` relative to the watched root; root's children are depth 0. */
+  #depthOf(abs: string): number {
+    const rel = path.relative(this.#root, abs);
+    if (rel === "" || rel === ".") return -1; // the root itself
+    return rel.split(path.sep).length - 1;
+  }
+
+  /** May we descend into `dir` (i.e. are its children within the depth limit)? */
+  #canDescend(dir: string): boolean {
+    return this.#depthOf(dir) < this.#options.depth;
+  }
+
+  /** Is `abs` within the configured depth limit (so events for it are kept)? */
+  #withinDepth(abs: string): boolean {
+    return this.#depthOf(abs) <= this.#options.depth;
   }
 
   /** Process raw notifications that arrived before the watcher became ready. */
@@ -337,7 +363,11 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
   async #seed(target: PlatformWatchTarget): Promise<void> {
     const entries = await scan(
       target.absolutePath,
-      { recursive: target.recursive, followSymlinks: this.#options.followSymlinks },
+      {
+        recursive: target.recursive,
+        followSymlinks: this.#options.followSymlinks,
+        maxDepth: this.#options.depth,
+      },
       this.#ignore,
       (error) => this.#reportError(error),
     );
@@ -362,6 +392,11 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
   }
 
   #processRaw(raw: RawFsEvent): void {
+    // Enforce the depth limit uniformly, including for native recursive backends
+    // that report events from arbitrarily deep in the tree.
+    if (this.#options.depth !== Infinity && !this.#withinDepth(raw.absolutePath)) {
+      return;
+    }
     const result = this.#classifier.classify(raw.absolutePath);
     if (!result) return;
 
@@ -425,9 +460,20 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
 
   async #scanNewDirectory(dirAbsolute: string): Promise<void> {
     if (this.#state === "closed") return;
+    // Translate the global depth limit into a budget relative to this subdir:
+    // its direct children sit at overall depth `#depthOf(dir) + 1`.
+    let subMaxDepth = Infinity;
+    if (this.#options.depth !== Infinity) {
+      subMaxDepth = this.#options.depth - (this.#depthOf(dirAbsolute) + 1);
+      if (subMaxDepth < 0) return; // children already beyond the limit
+    }
     const entries = await scan(
       dirAbsolute,
-      { recursive: true, followSymlinks: this.#options.followSymlinks },
+      {
+        recursive: true,
+        followSymlinks: this.#options.followSymlinks,
+        maxDepth: subMaxDepth,
+      },
       this.#ignore,
       (error) => this.#reportError(error),
     );

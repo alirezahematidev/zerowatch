@@ -11,7 +11,7 @@ import {
   inodeMoveDetectionSupported,
   type WatchEvent,
   type WatchOptions,
-} from "watchx";
+} from "zerowatch";
 ```
 
 ---
@@ -150,7 +150,7 @@ Enables `for await (const event of watcher)`. Breaking out of the loop (or `retu
 ## Capability flags
 
 ```ts
-import { nativeRecursiveSupported, inodeMoveDetectionSupported } from "watchx";
+import { nativeRecursiveSupported, inodeMoveDetectionSupported } from "zerowatch";
 ```
 
 - `nativeRecursiveSupported` — `true` on macOS/Windows, `false` on Linux (per-directory fallback).

@@ -1,5 +1,6 @@
 import fsp from "node:fs/promises";
 import path from "node:path";
+import { extname } from "../utils/paths.js";
 import type { PlatformSink, PlatformWatcher } from "../types/internal.js";
 
 interface PollEntry {
@@ -23,6 +24,10 @@ export class PollingWatcher implements PlatformWatcher {
   readonly #shouldWatchDir: (absolutePath: string) => boolean;
   readonly #followSymlinks: boolean;
   readonly #interval: number;
+  readonly #binaryExtensions: Set<string>;
+  /** How many base ticks between full re-stats of binary files (>= 1). */
+  readonly #binaryEvery: number;
+  #tickCount = 0;
   #known = new Map<string, PollEntry>();
   #timer: ReturnType<typeof setTimeout> | null = null;
   #closed = false;
@@ -35,6 +40,8 @@ export class PollingWatcher implements PlatformWatcher {
     shouldWatchDir: (absolutePath: string) => boolean,
     followSymlinks: boolean,
     interval: number,
+    binaryInterval: number,
+    binaryExtensions: Set<string>,
   ) {
     this.#root = root;
     this.#recursive = recursive;
@@ -42,11 +49,13 @@ export class PollingWatcher implements PlatformWatcher {
     this.#shouldWatchDir = shouldWatchDir;
     this.#followSymlinks = followSymlinks;
     this.#interval = interval;
+    this.#binaryExtensions = binaryExtensions;
+    this.#binaryEvery = Math.max(1, Math.round(binaryInterval / interval));
   }
 
   async start(): Promise<void> {
     // Capture a baseline without emitting; the core seeds initial state itself.
-    this.#known = await this.#walk();
+    this.#known = await this.#walk(true);
     this.#schedule();
   }
 
@@ -73,7 +82,10 @@ export class PollingWatcher implements PlatformWatcher {
     }
     this.#polling = true;
     try {
-      const next = await this.#walk();
+      // Re-stat binary files only every Nth tick (the binaryInterval cadence).
+      const checkBinary = this.#tickCount % this.#binaryEvery === 0;
+      this.#tickCount++;
+      const next = await this.#walk(checkBinary);
       if (this.#closed) return;
       this.#diff(this.#known, next);
       this.#known = next;
@@ -101,7 +113,7 @@ export class PollingWatcher implements PlatformWatcher {
     }
   }
 
-  async #walk(): Promise<Map<string, PollEntry>> {
+  async #walk(checkBinary: boolean): Promise<Map<string, PollEntry>> {
     const found = new Map<string, PollEntry>();
     const stack: string[] = [this.#root];
     const seenDirs = new Set<string>();
@@ -123,6 +135,15 @@ export class PollingWatcher implements PlatformWatcher {
         try {
           const isLink = dirent.isSymbolicLink();
           if (isLink && !this.#followSymlinks) continue;
+
+          // On non-check ticks, carry a binary file's last-known entry forward
+          // without stat-ing it, so it's polled at binaryInterval, not interval.
+          if (!checkBinary && !dirent.isDirectory() && this.#isBinary(abs)) {
+            const prev = this.#known.get(abs);
+            if (prev) found.set(abs, prev);
+            continue;
+          }
+
           const stats = isLink ? await fsp.stat(abs) : await fsp.lstat(abs);
           if (stats.isDirectory()) {
             found.set(abs, { mtimeMs: stats.mtimeMs, size: stats.size });
@@ -136,5 +157,9 @@ export class PollingWatcher implements PlatformWatcher {
       }
     }
     return found;
+  }
+
+  #isBinary(abs: string): boolean {
+    return this.#binaryExtensions.has(extname(abs));
   }
 }

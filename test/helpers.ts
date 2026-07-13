@@ -6,7 +6,7 @@ import type { Watcher } from "../src/core/watcher.js";
 
 /** Create a fresh temp directory and return it plus a cleanup function. */
 export function tempDir(): { dir: string; cleanup: () => void } {
-  const dir = mkdtempSync(join(tmpdir(), "watchx-test-"));
+  const dir = mkdtempSync(join(tmpdir(), "zerowatch-test-"));
   return {
     dir,
     cleanup: () => rmSync(dir, { recursive: true, force: true }),

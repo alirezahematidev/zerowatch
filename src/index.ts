@@ -1,5 +1,5 @@
 /**
- * watchx — a modern, ESM-first, zero-dependency file watcher for Node.js.
+ * zerowatch — a modern, dual ESM/CommonJS, zero-dependency file watcher for Node.js.
  *
  * @packageDocumentation
  */

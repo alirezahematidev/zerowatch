@@ -109,6 +109,36 @@ export interface WatchOptions {
    * `true`. Default: `500`.
    */
   interval?: number;
+  /**
+   * A separate, usually slower poll interval (ms) for binary files, matched by
+   * {@link WatchOptions.binaryExtensions}. Lets you poll large media/asset trees
+   * less aggressively. Only used when `usePolling` is `true`. Default: same as
+   * `interval`.
+   */
+  binaryInterval?: number;
+  /**
+   * File extensions treated as "binary" for {@link WatchOptions.binaryInterval}
+   * (with or without a leading dot). Defaults to a built-in set of common media,
+   * archive, and compiled-artifact extensions.
+   */
+  binaryExtensions?: string[];
+  /**
+   * Maximum recursion depth relative to each watched root. `0` watches only the
+   * root's direct entries; omitted means unlimited.
+   */
+  depth?: number;
+  /**
+   * Bound the async-iterator buffer to this many pending events (or batches).
+   * When a consumer cannot keep up, the oldest buffered items are dropped to cap
+   * memory. `0` / omitted means unbounded. Listeners (`.on`) are unaffected.
+   */
+  maxBufferedEvents?: number;
+  /**
+   * Detect content edits that leave size, mtime, and ctime unchanged by hashing
+   * file contents. Robust but costs an extra read per candidate event, so it is
+   * opt-in. Default: `false`.
+   */
+  hashChanges?: boolean;
 }
 
 /** Options for {@link createWatcher}, which additionally accepts the target paths. */

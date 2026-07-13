@@ -40,6 +40,9 @@ jobs:
       - name: Build
         run: yarn build
 
+      - name: Check published types (are-the-types-wrong)
+        run: yarn attw
+
   coverage:
     name: coverage
     runs-on: ubuntu-latest

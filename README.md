@@ -1,11 +1,11 @@
-# watchx
+# zerowatch
 
 > A modern, dual **ESM/CommonJS**, zero-dependency file watcher for Node.js — a spiritual successor to [chokidar](https://github.com/paulmillr/chokidar).
 
-`watchx` gives you filesystem watching with the ergonomics you'd design today: **async iterators** as the primary API, **promises** for lifecycle, **typed events**, and a **normalized four-event model** (`create` / `change` / `delete` / `move`) across Linux, macOS and Windows.
+`zerowatch` gives you filesystem watching with the ergonomics you'd design today: **async iterators** as the primary API, **promises** for lifecycle, **typed events**, and a **normalized four-event model** (`create` / `change` / `delete` / `move`) across Linux, macOS and Windows.
 
 ```ts
-import { watch } from "watchx";
+import { watch } from "zerowatch";
 
 for await (const event of watch("src")) {
   console.log(event.type, event.relativePath);
@@ -28,21 +28,21 @@ Requires **Node.js ≥ 20**.
 
 ## Module systems
 
-watchx ships both an ES-module and a CommonJS build, selected automatically via
+zerowatch ships both an ES-module and a CommonJS build, selected automatically via
 the package `exports` map:
 
 ```js
 // ESM / TypeScript
-import { watch } from "watchx";
+import { watch } from "zerowatch";
 
 // CommonJS
-const { watch } = require("watchx");
+const { watch } = require("zerowatch");
 ```
 
 ## Install
 
 ```sh
-npm install watchx
+npm install zerowatch
 ```
 
 ## Quick start
@@ -50,7 +50,7 @@ npm install watchx
 ### Async iterator (primary API)
 
 ```ts
-import { watch } from "watchx";
+import { watch } from "zerowatch";
 
 const watcher = watch("src", { recursive: true });
 
@@ -62,7 +62,7 @@ for await (const event of watcher) {
 ### Typed events
 
 ```ts
-import { watch } from "watchx";
+import { watch } from "zerowatch";
 
 const watcher = watch("src");
 
@@ -103,7 +103,7 @@ interface WatchEvent {
 }
 ```
 
-**Move detection** pairs a `delete` and a `create` sharing an inode within a short window (default 100 ms). On platforms where inodes aren't reliable (Windows), or when the pair can't be correlated, `watchx` gracefully falls back to emitting separate `delete` and `create` events. Check `inodeMoveDetectionSupported` to know which mode you're in.
+**Move detection** pairs a `delete` and a `create` sharing an inode within a short window (default 100 ms). On platforms where inodes aren't reliable (Windows), or when the pair can't be correlated, `zerowatch` gracefully falls back to emitting separate `delete` and `create` events. Check `inodeMoveDetectionSupported` to know which mode you're in.
 
 ## Options
 
@@ -126,8 +126,13 @@ watch("src", {
   cwd: process.cwd(),       // base for relative paths
   moveWindow: 100,          // ms to pair a delete+create into a move
   flushOnClose: false,      // on close, flush buffered (debounce/batch) events
+  depth: undefined,         // cap recursion depth (0 = root's direct entries)
+  hashChanges: false,       // detect same-size/mtime/ctime edits via content hash
+  maxBufferedEvents: 0,     // bound the async-iterator buffer (0 = unbounded)
   usePolling: false,        // use periodic stat scans instead of native fs.watch
   interval: 500,            // poll interval (ms) when usePolling is true
+  binaryInterval: 500,      // slower poll interval (ms) for binary files
+  binaryExtensions: [],     // extensions treated as binary (defaults built-in)
 });
 ```
 
@@ -143,7 +148,7 @@ await watcher.ready();
 
 await watcher.add("test");        // start watching another path
 await watcher.unwatch("src/vendor"); // stop watching a subtree
-watcher.getWatched();             // { "src": ["index.ts", ...], ... }
+watcher.getWatched();             // { ".": ["index.ts", "lib"], "lib": ["a.ts"] }
 ```
 
 ### Polling (network filesystems)
@@ -171,7 +176,7 @@ Without `batch`, it yields single `WatchEvent`s. The types reflect this automati
 
 ### Write stability (`awaitWrite`)
 
-Large or slowly-written files can fire many intermediate events. With `awaitWrite`, `watchx` holds back `create`/`change` events until a file's **size and mtime** have both been stable for a threshold (so even a same-length rewrite is caught):
+Large or slowly-written files can fire many intermediate events. With `awaitWrite`, `zerowatch` holds back `create`/`change` events until a file's **size and mtime** have both been stable for a threshold (so even a same-length rewrite is caught):
 
 ```ts
 watch("uploads", {
@@ -182,7 +187,7 @@ watch("uploads", {
 ## Convenience entry points
 
 ```ts
-import { watch, createWatcher } from "watchx";
+import { watch, createWatcher } from "zerowatch";
 
 watch("src");                       // auto-detects file vs directory
 watch.file("config.json");          // watch a single file
@@ -192,7 +197,7 @@ createWatcher({ paths: ["src", "test"], gitignore: true }); // explicit factory
 
 ## Error handling
 
-`watchx` never throws asynchronously and never crashes the process on recoverable errors (`EACCES`, `EPERM`, races). They surface through the `error` event; the watcher continues:
+`zerowatch` never throws asynchronously and never crashes the process on recoverable errors (`EACCES`, `EPERM`, races). They surface through the `error` event; the watcher continues:
 
 ```ts
 watch("/restricted").on("error", (err) => {
@@ -210,17 +215,18 @@ watch("/restricted").on("error", (err) => {
 
 ## Benchmarks
 
-Measured over a 5,000-file / 50-directory tree ([`bench/index.ts`](bench/index.ts), macOS). Run `yarn bench` to reproduce; if `chokidar` is installed it's compared side by side.
+Measured over a 5,000-file / 50-directory tree with [tinybench](https://github.com/tinylibs/tinybench) (warmup + 60+ samples) in [`bench/index.ts`](bench/index.ts), on macOS. Run `yarn bench` to reproduce; if `chokidar` is installed it's compared side by side.
 
-| | watchx | chokidar |
+| | zerowatch | chokidar |
 | --- | --- | --- |
-| Cold startup (`ready` over 5k files) | **~67 ms** | ~175 ms |
+| Cold startup (`ready` over 5k files) | **~58 ms** | ~175 ms |
 | Runtime dependencies | **0** | `readdirp` |
-| Bundle size (per format, minified) | **~19 KB** | — |
+| Bundle size (per format, minified) | **~21 KB** | — |
 
-Cold start is ~2.6× faster and the install footprint is dependency-free. Sustained
-per-event throughput is competitive but currently trails chokidar; see
-[TODOS.md](TODOS.md) for the planned async-classification work.
+Cold start is ~3× faster and the install footprint is dependency-free. Sustained
+per-event throughput is competitive but currently trails chokidar; keeping the
+classifier synchronous is a deliberate ordering-correctness tradeoff (see
+[TODOS.md](TODOS.md)).
 
 ## Documentation
 

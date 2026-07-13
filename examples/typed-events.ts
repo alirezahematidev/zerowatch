@@ -1,7 +1,7 @@
 /**
  * Typed event listeners, including move detection and error handling.
  */
-import { watch } from "watchx";
+import { watch } from "zerowatch";
 
 const watcher = watch("src");
 

@@ -13,11 +13,18 @@ export interface FsEntry {
   readonly mtimeMs: number;
   /** inode change time — advances on content edits even when size/mtime don't. */
   readonly ctimeMs: number;
+  /** Content hash, populated only when `hashChanges` is enabled. */
+  readonly hash?: string;
 }
 
 export interface ScanOptions {
   readonly recursive: boolean;
   readonly followSymlinks: boolean;
+  /**
+   * Max depth to descend, where the root's direct entries are depth 0.
+   * `Infinity` (default) descends without limit.
+   */
+  readonly maxDepth?: number;
 }
 
 /** Build an {@link FsEntry} from a stat result. */
@@ -55,7 +62,10 @@ export async function scan(
     return entries;
   }
 
-  const stack: string[] = [root];
+  const maxDepth = options.maxDepth ?? Infinity;
+  // Each frame carries the depth of the entries *inside* that directory (root's
+  // direct children are depth 0).
+  const stack: Array<{ dir: string; depth: number }> = [{ dir: root, depth: 0 }];
   const visited = new Set<string>();
   // Real dev:inode of every directory descended into, so a symlink (or hardlink)
   // that loops back into the tree is walked at most once — no infinite recursion.
@@ -63,7 +73,7 @@ export async function scan(
   visitedInodes.add(inodeKey(rootStats));
 
   while (stack.length > 0) {
-    const dir = stack.pop()!;
+    const { dir, depth } = stack.pop()!;
     if (visited.has(dir)) continue;
     visited.add(dir);
 
@@ -79,11 +89,12 @@ export async function scan(
       if (stats.isDirectory()) {
         if (ignore.ignoresDirectory(abs)) continue;
         entries.set(abs, toEntry(abs, stats));
-        if (options.recursive) {
+        // Descend only while the children we'd find stay within maxDepth.
+        if (options.recursive && depth < maxDepth) {
           const key = inodeKey(stats);
           if (visitedInodes.has(key)) continue; // symlink/hardlink cycle
           visitedInodes.add(key);
-          stack.push(abs);
+          stack.push({ dir: abs, depth: depth + 1 });
         }
       } else if (stats.isFile()) {
         if (ignore.ignoresFile(abs)) continue;

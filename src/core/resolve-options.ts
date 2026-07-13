@@ -1,4 +1,16 @@
+import { normalizeExtension } from "../utils/paths.js";
 import type { AwaitWriteOptions, WatchOptions } from "../types/options.js";
+
+/** Extensions polled at `binaryInterval` by default (common non-text assets). */
+const DEFAULT_BINARY_EXTENSIONS = [
+  // images
+  ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico", ".tiff", ".avif",
+  // media
+  ".mp3", ".wav", ".flac", ".ogg", ".mp4", ".mov", ".avi", ".mkv", ".webm",
+  // archives / binaries
+  ".zip", ".gz", ".tar", ".tgz", ".rar", ".7z", ".pdf", ".wasm", ".node",
+  ".exe", ".dll", ".so", ".dylib", ".bin", ".woff", ".woff2", ".ttf", ".otf",
+];
 
 /** Fully-resolved, defaulted options used internally by the watcher core. */
 export interface ResolvedOptions {
@@ -18,6 +30,16 @@ export interface ResolvedOptions {
   readonly usePolling: boolean;
   /** Poll interval (ms) for the polling backend. */
   readonly interval: number;
+  /** Poll interval (ms) for binary files under the polling backend. */
+  readonly binaryInterval: number;
+  /** Normalized set of extensions treated as binary for `binaryInterval`. */
+  readonly binaryExtensions: Set<string>;
+  /** Max recursion depth relative to the watched root (`Infinity` = unlimited). */
+  readonly depth: number;
+  /** Max async-iterator buffer size before dropping oldest (`0` = unbounded). */
+  readonly maxBufferedEvents: number;
+  /** Compare a content hash to detect same-size/mtime/ctime edits. */
+  readonly hashChanges: boolean;
   readonly raw: WatchOptions;
 }
 
@@ -29,6 +51,8 @@ export function resolveOptions(options: WatchOptions, cwd: string): ResolvedOpti
       : options.awaitWrite === false || options.awaitWrite === undefined
         ? false
         : options.awaitWrite;
+
+  const interval = Math.max(1, options.interval ?? 500);
 
   return {
     recursive: options.recursive ?? true,
@@ -42,7 +66,14 @@ export function resolveOptions(options: WatchOptions, cwd: string): ResolvedOpti
     moveWindow: Math.max(0, options.moveWindow ?? 100),
     flushOnClose: options.flushOnClose ?? false,
     usePolling: options.usePolling ?? false,
-    interval: Math.max(1, options.interval ?? 500),
+    interval,
+    binaryInterval: Math.max(1, options.binaryInterval ?? interval),
+    binaryExtensions: new Set(
+      (options.binaryExtensions ?? DEFAULT_BINARY_EXTENSIONS).map(normalizeExtension),
+    ),
+    depth: options.depth === undefined ? Infinity : Math.max(0, options.depth),
+    maxBufferedEvents: Math.max(0, options.maxBufferedEvents ?? 0),
+    hashChanges: options.hashChanges ?? false,
     raw: options,
   };
 }

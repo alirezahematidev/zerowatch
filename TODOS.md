@@ -1,85 +1,103 @@
-# watchx — TODOs & Improvement Backlog
+# zerowatch — TODOs & Improvement Backlog
 
-Tracks known limitations, latent bugs worth addressing, and future features.
+Everything previously tracked here has been implemented. What remains below is a
+record of completed work plus deliberate design decisions (not open tasks).
 
 ---
 
 ## ✅ Done
 
-### Hardening pass (2026-07-14)
+### Hardening pass
 
-- **Cross-OS ignore consistency** — descendants of an ignored directory are now
-  suppressed on macOS/Windows too (ancestor-aware `#ancestorIgnored`, memoized).
-- **CommonJS + ESM** — dual build via the `exports` map; `import` and `require`
-  both work.
-- **Bundled with tsup** — minified output (~19 KB/format, down from ~124 KB).
+- **Cross-OS ignore consistency** — descendants of an ignored directory are
+  suppressed on macOS/Windows too (ancestor-aware, memoized).
+- **CommonJS + ESM** — dual build; `import` and `require` both work. Validated in
+  CI with [`attw`](https://github.com/arethetypeswrong/arethetypeswrong.github.io)
+  (all resolution modes green).
+- **Bundled with tsup** — minified output (~19 KB/format).
 - Fixed: close-during-startup race, unhandled `ready()` rejection, false same-path
   `move`, `off()` not removing a pending `once()`, Windows path normalization.
 
-### Feature/robustness pass (2026-07-14)
+### Features & robustness
 
 - **`getWatched()` / `add()` / `unwatch()`** — live watcher management.
-- **Polling backend** (`usePolling`, `interval`) for network filesystems.
-- **`moveWindow`** is now configurable; **`flushOnClose`** drains buffered
-  debounce/batch events on close (dead `flush()` on the move detector removed).
-- **Directory-move child pairing** — cascade deletes carry real inodes, so moved
-  subtree contents can pair into `move`s (bounded by `moveWindow`).
-- **Sharper change detection** — compares `ctime` as well as size/mtime, catching
-  same-size same-millisecond edits.
-- **`awaitWrite`** settles on size **and** mtime (catches same-length rewrites).
-- **Symlink-cycle protection** — the scanner tracks real dev:inode and walks each
-  directory at most once.
+- **Polling backend** (`usePolling`, `interval`) for network filesystems, with a
+  separate **`binaryInterval`** / **`binaryExtensions`** cadence for large assets.
+- **`depth`** — cap recursion (enforced in the scanner and for live events on all
+  backends, including native recursive).
+- **`maxBufferedEvents`** — bounded async-iterator buffer (drop-oldest) for
+  backpressure against slow consumers.
+- **`hashChanges`** — content-hash fallback that catches edits which restore size,
+  mtime, *and* ctime.
+- **`moveWindow`** configurable; **`flushOnClose`** drains buffered debounce/batch
+  events on close.
+- **Directory-move child pairing** — cascade deletes carry real inodes.
+- **Sharper change detection** — compares `ctime` alongside size/mtime.
+- **`awaitWrite`** settles on size **and** mtime.
+- **Symlink-cycle protection** — the scanner tracks real dev:inode.
 - **Nested brace-expansion** in ignore globs (`{a,{b,c}}`).
-- **Emitter** skips the snapshot allocation for the common single-listener case.
-- **Tooling** — GitHub Actions CI (Linux/macOS/Windows × Node 20/22), V8 coverage,
-  release-it + conventional-changelog, CONTRIBUTING.md.
+- **Emitter** skips the snapshot allocation for the single-listener case.
+
+### Tooling & tests
+
+- GitHub Actions **CI** across Linux/macOS/Windows × Node 20/22, plus a coverage
+  job and an `attw` types check.
+- **release-it** + conventional-changelog, **CONTRIBUTING.md**, **CHANGELOG.md**.
+- New tests: bounded queue, depth (scan + live), `hashChanges`, `flushOnClose`,
+  polling, `getWatched`/`add`/`unwatch`, close-during-startup race, and direct
+  coverage of the manual per-directory watcher (`#reconcile` / `#removeSubtree`).
+- Dependencies on latest stable (Vitest 4, tsup 8, release-it 20).
 
 ---
 
-## ⚡ Performance — throughput vs chokidar
+## 📐 Design decisions (intentional, not open tasks)
 
-**Where:** [src/core/classifier.ts](src/core/classifier.ts), [src/core/watcher.ts](src/core/watcher.ts)
+### Synchronous event classification
 
-Cold-start is ~2.6× faster than chokidar, but sustained event **throughput** on
-the macOS micro-benchmark trails (~11k vs ~16k ev/s). The classifier calls
-`fs.lstatSync` synchronously per event for ordering determinism, which serializes
-draining of the OS event queue.
-
-- **Idea:** an async classification stage (batched `fs.stat` via a small bounded
-  pool) that preserves per-path ordering. Non-trivial — must not reorder events
-  for the same path — so gate behind benchmarks and thorough tests. **Deferred**
-  as the highest-risk change; everything else in the backlog shipped first.
-
----
-
-## ✨ Features (remaining)
-
-- **Backpressure on the async iterator** — [src/core/async-queue.ts](src/core/async-queue.ts)
-  buffers without bound; a slow consumer can grow memory unboundedly. Add an
-  optional high-water mark with a drop-oldest / coalesce policy.
-- **`binaryInterval`** — a separate (slower) poll interval for binary files, à la
-  chokidar, to reduce CPU when polling large media trees.
-- **`depth` option** — cap recursion depth for the manual/polling backends.
-
----
-
-## 🐛 Correctness — known gaps
-
-### Same-size, same-mtime, same-ctime edit
 **Where:** [src/core/classifier.ts](src/core/classifier.ts)
 
-Change detection now also compares `ctime`, which closes the common case. A write
-that leaves size, mtime, **and** ctime identical is still dropped (extremely rare;
-would require deliberate timestamp restoration). A content-hash fallback behind an
-option is the only fully-robust fix, at the cost of I/O.
+The classifier `stat`s each raw notification **synchronously**. This guarantees
+strict per-path event ordering and keeps the pipeline simple. It also means
+sustained throughput on a hot micro-benchmark trails chokidar (~11k vs ~16k
+ev/s), while cold-start is ~2.6× faster.
+
+An async classification stage (bounded `fs.stat` pool) could close that gap, but
+only safely if it preserves per-path ordering — a substantial change for an
+uncertain, workload-dependent win. **Decision: keep synchronous classification.**
+Revisit only if a real workload (not a micro-benchmark) shows classification is
+the bottleneck; if so, gate the async path behind an opt-in and benchmark it.
+
+### Depth relative to the primary root
+
+`depth` is measured from the watcher's primary root. Paths attached later via
+`add()` that live outside that root are watched in full (depth is not re-based per
+added target). This keeps the common single-root case simple; revisit if
+multi-root depth semantics are requested.
 
 ---
 
-## 🧪 Testing / tooling (remaining)
+## ▶ Planned
 
-- Add an explicit **close-during-startup** race test (the `#isClosed()` guards in
-  `#start` are in place but only covered indirectly).
-- Add direct coverage for the **manual recursive watcher** subtree add/remove
-  (`#reconcile` / `#removeSubtree`) — exercised on Linux CI but not unit-tested.
-- Consider **are-the-types-wrong** (`attw`) in CI to guard the dual-package
-  `exports` map against types regressions.
+- [ ] **`FinalizationRegistry` leak safety-net** — [src/core/watcher.ts](src/core/watcher.ts).
+  If a `Watcher` is dropped without `close()`, its native `fs.watch` handles leak.
+  Register the platform-watcher set (a holder object, *not* the `Watcher` itself,
+  so it stays collectable) in a `FinalizationRegistry`; on finalization, close any
+  handles that are still open. Built-in — no dependency, no zero-dep impact.
+  *Caveats:* finalizers aren't guaranteed to run, so this is a backstop, not a
+  substitute for `close()`; register the holder (never `this`) to avoid pinning
+  the watcher alive. *Scope:* wire it in the constructor / `#start`, deregister in
+  `close()`, add a documented note that explicit `close()` is still required.
+
+- [ ] **typedoc API reference** (dev-only) — generate an HTML/Markdown API site
+  from the existing JSDoc + types. *Scope:* add `typedoc` devDep, a `typedoc.json`
+  (entry `src/index.ts`), a `docs:api` script, and a CI/publish step or committed
+  output under `docs/`. Keeps the hand-written [docs/API.md](docs/API.md) as the
+  narrative guide; typedoc covers the exhaustive symbol reference.
+
+---
+
+## 💡 Possible future enhancements (not planned)
+
+- `binaryInterval` heuristics beyond extension matching (e.g. sniffing content).
+- A `depth` re-basing mode for independently-rooted `add()` targets.
+- Configurable content-hash algorithm for `hashChanges` (currently SHA-1).

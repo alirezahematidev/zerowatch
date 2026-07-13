@@ -1,6 +1,6 @@
 # Examples
 
-These files import from `"watchx"` as an installed package would. To run them against a local checkout, either build the package (`npm run build`) and adjust the import to `"../dist/index.js"`, or link the package.
+These files import from `"zerowatch"` as an installed package would. To run them against a local checkout, either build the package (`npm run build`) and adjust the import to `"../dist/index.js"`, or link the package.
 
 On Node.js ≥ 22.18 (TypeScript stripping is on by default) you can run the `.ts` files directly:
 

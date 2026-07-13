@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, utimesSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { watch } from "../src/index.js";
 import type { WatchEvent } from "../src/index.js";
@@ -130,5 +130,84 @@ describe("usePolling backend", () => {
     writeFileSync(join(dir, "f.txt"), "two-longer");
     await waitFor(() => types.has("change:f.txt"), 3000);
     expect(types.has("change:f.txt")).toBe(true);
+  });
+});
+
+describe("depth", () => {
+  it("only reports entries within the depth limit", async () => {
+    const dir = makeDir();
+    mkdirSync(join(dir, "a", "b"), { recursive: true });
+
+    const w = watch(dir, { depth: 0 });
+    cleanups.push(() => void w.close());
+    const seen: string[] = [];
+    w.on("create", (e) => seen.push(e.relativePath));
+    await w.ready();
+    await sleep(50);
+
+    // depth 0 = only the root's direct entries.
+    expect(seen).toContain("a");
+    expect(seen).not.toContain("a/b");
+  });
+
+  it("suppresses live events deeper than the limit", async () => {
+    const dir = makeDir();
+    mkdirSync(join(dir, "a"), { recursive: true });
+    const w = watch(dir, { ignoreInitial: true, depth: 0 });
+    cleanups.push(() => void w.close());
+    await w.ready();
+
+    const seen: string[] = [];
+    w.on("all", (e) => seen.push(e.relativePath));
+    writeFileSync(join(dir, "top.txt"), "1"); // depth 0 — kept
+    writeFileSync(join(dir, "a", "deep.txt"), "2"); // depth 1 — dropped
+    await waitFor(() => seen.includes("top.txt"), 3000);
+    await sleep(150);
+    expect(seen).toContain("top.txt");
+    expect(seen.some((p) => p.includes("deep.txt"))).toBe(false);
+  });
+});
+
+describe("hashChanges", () => {
+  it("detects an edit that restores size, mtime, and ctime", async () => {
+    const dir = makeDir();
+    const file = join(dir, "f.txt");
+    writeFileSync(file, "aaaa");
+    const w = watch(dir, { ignoreInitial: true, hashChanges: true });
+    cleanups.push(() => void w.close());
+    await w.ready();
+
+    const changes: string[] = [];
+    w.on("change", (e) => changes.push(e.relativePath));
+
+    // Same length ("bbbb"), then forcibly restore the original timestamps so the
+    // cheap size/mtime/ctime checks all say "unchanged" — only the hash differs.
+    const before = statSync(file);
+    writeFileSync(file, "bbbb");
+    utimesSync(file, before.atime, before.mtime);
+
+    await waitFor(() => changes.includes("f.txt"), 3000);
+    expect(changes).toContain("f.txt");
+  });
+});
+
+describe("close during startup", () => {
+  it("never emits ready after close and terminates cleanly", async () => {
+    const dir = makeDir();
+    writeFileSync(join(dir, "a.txt"), "1");
+    const w = watch(dir);
+
+    let readyFired = false;
+    let closeFired = false;
+    w.on("ready", () => (readyFired = true));
+    w.on("close", () => (closeFired = true));
+
+    // Close immediately, before the queued #start microtask has finished.
+    await w.close();
+    await sleep(80);
+
+    expect(closeFired).toBe(true);
+    expect(readyFired).toBe(false);
+    expect(w.getWatched()).toEqual({}); // no handles/entries leaked
   });
 });

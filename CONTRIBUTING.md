@@ -1,6 +1,6 @@
-# Contributing to watchx
+# Contributing to zerowatch
 
-Thanks for your interest in improving watchx! This guide covers the workflow,
+Thanks for your interest in improving zerowatch! This guide covers the workflow,
 project layout, and conventions.
 
 ## Prerequisites
@@ -11,7 +11,7 @@ project layout, and conventions.
 
 ```sh
 git clone <your-fork>
-cd watchx
+cd zerowatch
 yarn install
 ```
 
@@ -55,7 +55,7 @@ OS-specific behavior behind that seam.
 - **Strict TypeScript.** No `any`, no `@ts-ignore`; `strict` and
   `exactOptionalPropertyTypes` are on. Prefer precise types over casts.
 - **ESM import specifiers** must include the `.js` extension (NodeNext).
-- **No new runtime dependencies.** watchx is zero-dependency by design; dev-only
+- **No new runtime dependencies.** zerowatch is zero-dependency by design; dev-only
   tooling is fine.
 - **Errors never crash.** Recoverable errors surface via the `error` event; the
   watcher keeps running. Don't throw from the event hot path.

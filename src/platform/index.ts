@@ -15,6 +15,8 @@ export { nativeRecursiveSupported, inodeMoveDetectionSupported } from "./capabil
 export interface PlatformOptions {
   readonly usePolling: boolean;
   readonly interval: number;
+  readonly binaryInterval: number;
+  readonly binaryExtensions: Set<string>;
 }
 
 /**
@@ -39,6 +41,8 @@ export function createPlatformWatcher(
       shouldWatchDir,
       target.followSymlinks,
       options.interval,
+      options.binaryInterval,
+      options.binaryExtensions,
     );
   }
 
