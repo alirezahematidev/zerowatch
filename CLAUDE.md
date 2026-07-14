@@ -63,6 +63,12 @@ NODE_OPTIONS=--expose-gc yarn vitest run test/leak.test.ts
   `describe.skipIf(process.platform === "win32")`).
 - Conventional Commits for messages (`feat`, `fix`, `test`, `docs`, …).
 
+## Git
+
+- **Never `git push`.** Committing locally is fine when asked, but the user
+  reviews every change manually and pushes themselves. Do not push branches,
+  tags, or `main` to any remote under any circumstances.
+
 ## Docs
 
 - `README.md` — features, quick start, options.
