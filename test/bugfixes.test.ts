@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { watch } from "../src/index.js";
 import type { WatchEvent } from "../src/index.js";
@@ -60,6 +60,37 @@ describe("bug: unwatch() leaves in-flight holds active", () => {
     await sleep(250);
 
     expect(seen).toEqual([]);
+  });
+});
+
+describe("bug: polling walk explodes on a symlink cycle", () => {
+  it("does not descend into a symlinked directory that loops back into the tree", async () => {
+    const dir = makeDir();
+    mkdirSync(join(dir, "sub"));
+    writeFileSync(join(dir, "sub", "a.txt"), "x");
+    symlinkSync(dir, join(dir, "loop")); // loop -> dir: a cycle
+
+    const events: WatchEvent[] = [];
+    const w = track(
+      watch(dir, { usePolling: true, interval: 50, followSymlinks: true, ignoreInitial: true }),
+    );
+    w.on("all", (e) => events.push(e));
+
+    const ready = await Promise.race([
+      w.ready().then(() => true),
+      sleep(3000).then(() => false),
+    ]);
+    expect(ready).toBe(true);
+    await sleep(120); // establish the polling baseline
+
+    // Editing the real file must surface once, not once per phantom path the
+    // cycle would otherwise fabricate under loop/loop/loop/…
+    events.length = 0;
+    writeFileSync(join(dir, "sub", "a.txt"), "y-longer-content");
+    await sleep(300);
+
+    const underLoop = events.filter((e) => e.relativePath.includes("loop/"));
+    expect(underLoop).toEqual([]);
   });
 });
 
