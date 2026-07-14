@@ -30,16 +30,6 @@ multi-root depth semantics are requested.
 
 ## ▶ Planned
 
-- [ ] **`FinalizationRegistry` leak safety-net** — [src/core/watcher.ts](src/core/watcher.ts).
-  If a `Watcher` is dropped without `close()`, its native `fs.watch` handles leak.
-  Register the platform-watcher set (a holder object, *not* the `Watcher` itself,
-  so it stays collectable) in a `FinalizationRegistry`; on finalization, close any
-  handles that are still open. Built-in — no dependency, no zero-dep impact.
-  *Caveats:* finalizers aren't guaranteed to run, so this is a backstop, not a
-  substitute for `close()`; register the holder (never `this`) to avoid pinning
-  the watcher alive. *Scope:* wire it in the constructor / `#start`, deregister in
-  `close()`, add a documented note that explicit `close()` is still required.
-
 - [ ] **`virtual-fs` dogfooding project** — build a realistic, standalone app at
   `~/Desktop/projects/virtual-fs`: a React + Node.js **virtual file manager** for a
   given source directory. Its core (live tree, change/create/delete/move reflection,
@@ -51,23 +41,6 @@ multi-root depth semantics are requested.
   normalized events (WS/SSE) to a React UI that renders the live file tree; cover
   ignore globs/`.gitignore`, `depth`, `move` rendering, `awaitWrite`, and
   `maxBufferedEvents`. Feed any friction found back into `zerowatch` as issues/fixes.
-
-- [ ] **Bench against other chokidar alternatives** — [bench/index.ts](bench/index.ts)
-  currently compares only against `chokidar` (when present). Extend the harness to
-  optionally benchmark the other well-known watchers — **`@parcel/watcher`**,
-  **`nodemon`/`node-dev`-style pollers**, **`watchpack`** (webpack), **`sane`**,
-  **`node:fs.watch` raw** — each behind the same "run only if installed" guard so
-  they stay non-dependencies. Report cold-start and sustained-throughput for each in
-  a comparison table (extend the `bench/` README/output), on the same 5k-file tree.
-  *Scope:* add per-watcher adapters conforming to the existing `BenchWatcher` shape,
-  keep the silent-skip-when-absent behavior, and note platform caveats (e.g.
-  `@parcel/watcher` native backend differences per OS).
-
-- [ ] **typedoc API reference** (dev-only) — generate an HTML/Markdown API site
-  from the existing JSDoc + types. *Scope:* add `typedoc` devDep, a `typedoc.json`
-  (entry `src/index.ts`), a `docs:api` script, and a CI/publish step or committed
-  output under `docs/`. Keeps the hand-written [docs/API.md](docs/API.md) as the
-  narrative guide; typedoc covers the exhaustive symbol reference.
 
 ---
 
