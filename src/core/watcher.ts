@@ -30,7 +30,12 @@ import { relativeTo } from "../utils/paths.js";
 /** Internal lifecycle states. */
 type State = "idle" | "starting" | "ready" | "closed";
 
-/** The unit yielded by the async iterator: single events, or arrays when batching. */
+/**
+ * The unit yielded by the async iterator: single events, or arrays when
+ * batching is enabled via {@link WatchOptions.batch}.
+ *
+ * @category Watcher
+ */
 export type EmittedUnit = WatchEvent | WatchEvent[];
 
 /**
@@ -41,6 +46,20 @@ export type EmittedUnit = WatchEvent | WatchEvent[];
  *
  * `T` is the async-iterator element type: {@link WatchEvent} normally, or
  * `WatchEvent[]` when `batch` is enabled.
+ *
+ * Construct one via {@link watch} or {@link createWatcher} rather than directly.
+ *
+ * @category Watcher
+ * @example
+ * ```ts
+ * const watcher = watch("src");
+ * watcher.on("all", (e) => console.log(e.type, e.relativePath));
+ * await watcher.ready();          // initial scan complete, now live
+ * await watcher.add("tests");     // watch more paths on the fly
+ * watcher.pause();                // buffer events…
+ * watcher.resume();               // …and flush them
+ * await watcher.close();          // release handles, end iteration
+ * ```
  */
 export class Watcher<T extends EmittedUnit = WatchEvent>
   implements AsyncIterable<T>

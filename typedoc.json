@@ -5,5 +5,20 @@
   "excludeInternal": true,
   "excludePrivate": true,
   "includeVersion": true,
-  "readme": "none"
+  "readme": "none",
+  "intentionallyNotExported": ["BatchedOptions"],
+  "categorizeByGroup": false,
+  "categoryOrder": [
+    "Entry Points",
+    "Watcher",
+    "Events",
+    "Options",
+    "Capabilities",
+    "*"
+  ],
+  "navigation": {
+    "includeCategories": true,
+    "includeGroups": false
+  },
+  "sort": ["source-order"]
 }
