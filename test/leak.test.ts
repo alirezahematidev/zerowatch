@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { WeakSink } from "../src/platform/weak-sink.js";
-import { closeLeakedWatchers } from "../src/core/leak-registry.js";
+import { closeLeakedWatchers, leakRegistry } from "../src/core/leak-registry.js";
 import type {
   PlatformSink,
   PlatformWatcher,
@@ -54,6 +54,35 @@ describe("closeLeakedWatchers", () => {
     };
 
     expect(() => closeLeakedWatchers(holder)).not.toThrow();
+    expect(closed).toBe(1);
+    expect(holder.watchers.size).toBe(0);
+  });
+});
+
+const gc = (globalThis as { gc?: () => void }).gc;
+
+describe("leakRegistry (GC-gated)", () => {
+  // Requires `node --expose-gc`. Skipped otherwise so normal CI never flakes on
+  // non-deterministic garbage collection.
+  it.skipIf(!gc)("closes tracked handles when the owner is collected", async () => {
+    let closed = 0;
+    const watcher: PlatformWatcher = {
+      start: async () => {},
+      close: async () => { closed++; },
+    };
+    const holder = { watchers: new Set([watcher]) };
+
+    // `owner` stands in for a Watcher; the holder must not reference it back.
+    let owner: object | null = {};
+    leakRegistry.register(owner, holder, owner);
+
+    owner = null; // drop the only strong reference
+    gc!();
+    // Finalization callbacks run on a later microtask/turn after collection.
+    await new Promise((r) => setTimeout(r, 50));
+    gc!();
+    await new Promise((r) => setTimeout(r, 50));
+
     expect(closed).toBe(1);
     expect(holder.watchers.size).toBe(0);
   });
