@@ -52,6 +52,17 @@ multi-root depth semantics are requested.
   ignore globs/`.gitignore`, `depth`, `move` rendering, `awaitWrite`, and
   `maxBufferedEvents`. Feed any friction found back into `zerowatch` as issues/fixes.
 
+- [ ] **Bench against other chokidar alternatives** — [bench/index.ts](bench/index.ts)
+  currently compares only against `chokidar` (when present). Extend the harness to
+  optionally benchmark the other well-known watchers — **`@parcel/watcher`**,
+  **`nodemon`/`node-dev`-style pollers**, **`watchpack`** (webpack), **`sane`**,
+  **`node:fs.watch` raw** — each behind the same "run only if installed" guard so
+  they stay non-dependencies. Report cold-start and sustained-throughput for each in
+  a comparison table (extend the `bench/` README/output), on the same 5k-file tree.
+  *Scope:* add per-watcher adapters conforming to the existing `BenchWatcher` shape,
+  keep the silent-skip-when-absent behavior, and note platform caveats (e.g.
+  `@parcel/watcher` native backend differences per OS).
+
 - [ ] **typedoc API reference** (dev-only) — generate an HTML/Markdown API site
   from the existing JSDoc + types. *Scope:* add `typedoc` devDep, a `typedoc.json`
   (entry `src/index.ts`), a `docs:api` script, and a CI/publish step or committed
