@@ -7,8 +7,6 @@
  * - `change` — an existing file's contents changed.
  * - `delete` — a file or directory was removed.
  * - `move` — an entry was renamed/moved; see {@link WatchEvent.oldPath}.
- *
- * @category Events
  */
 export type WatchEventType = "create" | "change" | "delete" | "move";
 
@@ -19,7 +17,6 @@ export type WatchEventType = "create" | "change" | "delete" | "move";
  * of the entry. For `move` events that means the destination; the origin is
  * available on {@link WatchEvent.oldPath}.
  *
- * @category Events
  * @example
  * ```ts
  * watcher.on("all", (event: WatchEvent) => {
@@ -61,8 +58,6 @@ export interface WatchEvent {
  * An error surfaced by a watcher. Watchers never throw asynchronously and never
  * crash the process on recoverable errors (e.g. `EACCES`, `EPERM`); instead the
  * error is delivered through the `error` event.
- *
- * @category Events
  */
 export interface WatchError extends Error {
   /** The underlying errno code when available (e.g. `EACCES`). */

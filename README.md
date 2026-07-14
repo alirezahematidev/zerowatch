@@ -230,8 +230,7 @@ classifier synchronous is a deliberate ordering-correctness tradeoff (see
 
 ## Documentation
 
-- [API reference](docs/API.md) — hand-written narrative guide
-- [Generated API docs](https://alirezahematidev.github.io/zerowatch/) — exhaustive symbol reference (typedoc)
+- [API reference](docs/API.md) — the full reference guide
 - [Migration guide from chokidar](docs/MIGRATION.md)
 - [Examples](examples/)
 - [Contributing](CONTRIBUTING.md)

@@ -9,8 +9,6 @@ type BatchedOptions = WatchOptions & { batch: number };
  * The `watch` entry point, callable directly and also carrying `file` and
  * `directory` convenience variants. When `batch` is set the returned watcher
  * yields `WatchEvent[]`; otherwise it yields single `WatchEvent`s.
- *
- * @category Entry Points
  */
 export interface WatchFunction {
   (path: string | string[], options: BatchedOptions): Watcher<WatchEvent[]>;
@@ -70,7 +68,6 @@ watchImpl.directory = ((dirPath: string, options: WatchOptions = {}) =>
  * @param path one or more files/directories to watch (relative to `cwd`).
  * @param options see {@link WatchOptions}.
  *
- * @category Entry Points
  * @example
  * ```ts
  * // Async iteration
@@ -94,7 +91,6 @@ export const watch: WatchFunction = watchImpl;
  * Explicit factory equivalent to {@link watch}, taking the target paths inside
  * the options object. Handy when options are assembled programmatically.
  *
- * @category Entry Points
  * @example
  * ```ts
  * const opts: CreateWatcherOptions = { paths: "src", debounce: 50 };

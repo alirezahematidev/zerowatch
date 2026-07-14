@@ -4,19 +4,7 @@ One-time repository configuration the workflows in this directory depend on.
 Most of these can only be done by a repo admin in the GitHub UI — they cannot be
 committed to the repo.
 
-## 1. GitHub Pages (API docs deploy) — required for `docs.yml`
-
-The `API docs` workflow publishes the typedoc site to GitHub Pages. It fails
-until Pages is switched to the Actions source:
-
-**Settings → Pages → Build and deployment → Source → "GitHub Actions".**
-
-After that, pushing to `main` deploys to
-`https://alirezahematidev.github.io/zerowatch/`. No secret or token is needed —
-Pages uses the workflow's built-in `GITHUB_TOKEN` with the `pages: write` /
-`id-token: write` permissions already declared in `docs.yml`.
-
-## 2. Claude GitHub App + `ANTHROPIC_API_KEY` — required for `claude.yml` and `claude-code-review.yml`
+## 1. Claude GitHub App + `ANTHROPIC_API_KEY` — required for `claude.yml` and `claude-code-review.yml`
 
 These workflows call `anthropics/claude-code-action`, which needs two things:
 
@@ -41,13 +29,12 @@ These workflows call `anthropics/claude-code-action`, which needs two things:
    > in both workflow files and add that secret instead. `/install-github-app`
    > can generate the OAuth token for you.
 
-## 3. Nothing extra for `ci.yml`
+## 2. Nothing extra for `ci.yml`
 
 Test/typecheck/build/attw run entirely on the built-in `GITHUB_TOKEN` with
 read-only permissions. No secrets required.
 
 ## Quick checklist
 
-- [ ] Pages source set to "GitHub Actions"
 - [ ] Claude GitHub App installed on the repo
 - [ ] `ANTHROPIC_API_KEY` (or `CLAUDE_CODE_OAUTH_TOKEN`) secret added

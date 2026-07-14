@@ -3,8 +3,6 @@ import type { WatchEvent } from "./events.js";
 /**
  * A user-supplied predicate deciding whether a path should be ignored.
  * Return `true` to ignore the entry (and, for directories, its descendants).
- *
- * @category Options
  */
 export type IgnoreFunction = (
   absolutePath: string,
@@ -14,8 +12,6 @@ export type IgnoreFunction = (
 /**
  * Any accepted form of ignore rule: a glob string, a predicate, or an array of
  * either.
- *
- * @category Options
  */
 export type IgnoreInput = string | IgnoreFunction | Array<string | IgnoreFunction>;
 
@@ -23,8 +19,6 @@ export type IgnoreInput = string | IgnoreFunction | Array<string | IgnoreFunctio
  * Fine-grained control over write-stability detection. When enabled, `create`
  * and `change` events for files are held back until the file has stopped
  * growing, so that consumers never observe a partially written file.
- *
- * @category Options
  */
 export interface AwaitWriteOptions {
   /** Milliseconds a file's size must remain unchanged before emitting. Default: `100`. */
@@ -37,7 +31,6 @@ export interface AwaitWriteOptions {
  * Options accepted by {@link watch}, {@link createWatcher} and friends.
  * Every field is optional; sensible defaults are documented per-field.
  *
- * @category Options
  * @example
  * ```ts
  * // Watch TypeScript sources, ignore build output, coalesce editor saves,
@@ -163,8 +156,6 @@ export interface WatchOptions {
 
 /**
  * Options for {@link createWatcher}, which additionally accepts the target paths.
- *
- * @category Options
  */
 export interface CreateWatcherOptions extends WatchOptions {
   /** One or more paths to watch. */
@@ -174,8 +165,6 @@ export interface CreateWatcherOptions extends WatchOptions {
 /**
  * The map of events a {@link Watcher} emits, keyed by event name. Used to
  * derive fully-typed `on`/`off` signatures.
- *
- * @category Events
  */
 export interface WatcherEventMap {
   create: (event: WatchEvent) => void;
@@ -196,7 +185,5 @@ export interface WatcherEventMap {
 
 /**
  * The union of event names a {@link Watcher} can emit.
- *
- * @category Events
  */
 export type WatcherEventName = keyof WatcherEventMap;

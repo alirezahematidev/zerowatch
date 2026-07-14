@@ -13,8 +13,8 @@ that is both an event emitter and an async iterable.
 ## Hard constraints
 
 - **No runtime dependencies.** `package.json` `dependencies` must stay empty.
-  Everything ships built-in. Dev/optional tools (bench comparisons, typedoc) are
-  `devDependencies` or optional imports guarded by `try/catch`.
+  Everything ships built-in. Dev/optional tools (e.g. bench comparison watchers)
+  are `devDependencies` or optional imports guarded by `try/catch`.
 - **ESM with explicit `.js` import specifiers** even in `.ts` source
   (`import { x } from "./foo.js"`). `verbatimModuleSyntax` is on — use
   `import type` for type-only imports.
@@ -29,7 +29,6 @@ yarn typecheck      # tsc --noEmit
 yarn test           # vitest run
 yarn test:coverage  # vitest run --coverage
 yarn bench          # build, then node bench/index.ts
-yarn docs:api       # typedoc → docs/api (gitignored, published via CI)
 yarn attw           # verify published types (are-the-types-wrong)
 ```
 
@@ -66,6 +65,6 @@ NODE_OPTIONS=--expose-gc yarn vitest run test/leak.test.ts
 
 ## Docs
 
-- `docs/API.md` — hand-written narrative guide (keep current).
-- `docs/api/` — generated typedoc (gitignored; published to GitHub Pages by CI).
+- `README.md` — features, quick start, options.
+- `docs/API.md` — the full API reference (keep current when public behavior changes).
 - `TODOS.md` — backlog and intentional design decisions.

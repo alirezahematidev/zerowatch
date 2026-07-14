@@ -89,22 +89,11 @@ Common types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`,
 `chore`. A `!` after the type (or a `BREAKING CHANGE:` footer) marks a breaking
 change.
 
-## API docs (dev-only)
+## Docs
 
-The exhaustive symbol reference is generated from the source JSDoc + types with
-[typedoc](https://typedoc.org):
-
-```sh
-yarn docs:api
-```
-
-Output is written to `docs/api/` (gitignored — not committed). The hand-written
-[docs/API.md](docs/API.md) remains the narrative guide.
-
-On every push to `main`, the `API docs` workflow regenerates the site and
-publishes it to GitHub Pages at
-<https://alirezahematidev.github.io/zerowatch/>. So the generated reference is
-never committed — it is always rebuilt from source and deployed by CI.
+- [README.md](README.md) — features, quick start, and options.
+- [docs/API.md](docs/API.md) — the full API reference. Keep it in sync when you
+  change public behavior.
 
 ## Releasing (maintainers)
 

@@ -33,8 +33,6 @@ type State = "idle" | "starting" | "ready" | "closed";
 /**
  * The unit yielded by the async iterator: single events, or arrays when
  * batching is enabled via {@link WatchOptions.batch}.
- *
- * @category Watcher
  */
 export type EmittedUnit = WatchEvent | WatchEvent[];
 
@@ -49,7 +47,6 @@ export type EmittedUnit = WatchEvent | WatchEvent[];
  *
  * Construct one via {@link watch} or {@link createWatcher} rather than directly.
  *
- * @category Watcher
  * @example
  * ```ts
  * const watcher = watch("src");
