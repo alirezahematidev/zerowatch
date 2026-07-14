@@ -119,6 +119,13 @@ Resolves once the initial directory scan is complete and live watching has begun
 
 Stops watching, releases all native handles, and terminates the async iterator. Idempotent.
 
+> **Resource cleanup:** Always call `close()` when you are done with a watcher —
+> it releases native `fs.watch` handles and ends the async iterator. As a
+> backstop, a `Watcher` dropped without `close()` will have its handles closed
+> when it is eventually garbage-collected, but finalizers are **not guaranteed
+> to run** (and may run arbitrarily late), so explicit `close()` remains
+> required for deterministic cleanup.
+
 ### `watcher.on(event, listener)` / `once` / `off`
 
 Fully typed. Events:

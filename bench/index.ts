@@ -10,7 +10,7 @@
  * comparison is skipped silently when it isn't present.
  */
 import { Bench } from "tinybench";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, watch as fsWatch } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { watch } from "../dist/index.js";
@@ -58,13 +58,22 @@ async function loadChokidar(): Promise<typeof import("chokidar") | null> {
   }
 }
 
+/** Try to import an optional watcher; return null (skip) if it isn't installed. */
+async function tryImport<T>(name: string): Promise<T | null> {
+  try {
+    return (await import(name)) as T;
+  } catch {
+    return null;
+  }
+}
+
 /** Adapters that create a ready watcher wired to `onEvent`, for each library. */
 interface Adapter {
   readonly name: string;
   start(root: string, onEvent: () => void): Promise<BenchWatcher>;
 }
 
-function adapters(chokidar: typeof import("chokidar") | null): Adapter[] {
+async function adapters(chokidar: typeof import("chokidar") | null): Promise<Adapter[]> {
   const list: Adapter[] = [
     {
       name: "zerowatch",
@@ -87,6 +96,63 @@ function adapters(chokidar: typeof import("chokidar") | null): Adapter[] {
       },
     });
   }
+
+  // @parcel/watcher — native backend (FSEvents/inotify/Windows); differs per OS.
+  const parcel = await tryImport<typeof import("@parcel/watcher")>("@parcel/watcher");
+  if (parcel) {
+    list.push({
+      name: "@parcel/watcher",
+      async start(root, onEvent) {
+        const sub = await parcel.subscribe(root, (_err, events) => {
+          for (let i = 0; i < events.length; i++) onEvent();
+        });
+        return { close: () => sub.unsubscribe() };
+      },
+    });
+  }
+
+  // watchpack (webpack) — no reliable "ready" signal; resolve after watch() returns.
+  const watchpack = await tryImport<{ default: new (opts?: unknown) => any }>("watchpack");
+  if (watchpack) {
+    list.push({
+      name: "watchpack",
+      async start(root, onEvent) {
+        const Watchpack = watchpack.default;
+        const wp = new Watchpack({});
+        wp.on("change", () => onEvent());
+        wp.on("remove", () => onEvent());
+        wp.watch({ directories: [root] });
+        return { close: () => wp.close() };
+      },
+    });
+  }
+
+  // sane — emits change/add/delete and a ready event.
+  const sane = await tryImport<{ default: (dir: string, opts?: unknown) => any }>("sane");
+  if (sane) {
+    list.push({
+      name: "sane",
+      async start(root, onEvent) {
+        const w = sane.default(root);
+        await new Promise<void>((resolve) => w.on("ready", () => resolve()));
+        w.on("change", () => onEvent());
+        w.on("add", () => onEvent());
+        w.on("delete", () => onEvent());
+        return { close: () => w.close() };
+      },
+    });
+  }
+
+  // Raw node:fs.watch — always available. NOTE: recursive:true is unsupported on
+  // Linux, so throughput is under-reported there (documented in bench/README.md).
+  list.push({
+    name: "node:fs.watch (raw)",
+    async start(root, onEvent) {
+      const w = fsWatch(root, { recursive: true, persistent: true }, () => onEvent());
+      return { close: () => w.close() };
+    },
+  });
+
   return list;
 }
 
@@ -167,14 +233,14 @@ async function main(): Promise<void> {
   console.log(`Building tree: ${FILES} files across ${DIRS} dirs …`);
   const startupTree = buildTree();
   try {
-    await runStartup(startupTree, adapters(chokidar));
+    await runStartup(startupTree, await adapters(chokidar));
   } finally {
     rmSync(startupTree, { recursive: true, force: true });
   }
 
   const tputTree = buildTree();
   try {
-    await runThroughput(tputTree, adapters(chokidar));
+    await runThroughput(tputTree, await adapters(chokidar));
   } finally {
     rmSync(tputTree, { recursive: true, force: true });
   }

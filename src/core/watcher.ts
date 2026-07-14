@@ -17,6 +17,7 @@ import { EventFactory } from "../events/factory.js";
 import { MoveDetector } from "../events/move-detector.js";
 import { AsyncQueue } from "./async-queue.js";
 import { resolveOptions, type ResolvedOptions } from "./resolve-options.js";
+import { leakRegistry, type WatcherHolder } from "./leak-registry.js";
 import { EventClassifier } from "./classifier.js";
 import { IgnoreEngine } from "../ignore/ignore-engine.js";
 import { Debouncer } from "../debounce/debouncer.js";
@@ -63,6 +64,11 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
 
   /** Platform adapters keyed by their target's absolute path (for unwatch()). */
   readonly #watchers = new Map<string, PlatformWatcher>();
+  /**
+   * Same platform adapters, in a back-reference-free holder registered with the
+   * leak-safety FinalizationRegistry. Kept in sync with #watchers.
+   */
+  readonly #holder: WatcherHolder = { watchers: new Set() };
   #sink!: PlatformSink;
 
   #state: State = "idle";
@@ -199,6 +205,7 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
       const watcher = this.#watchers.get(target.absolutePath);
       if (!watcher) continue;
       this.#watchers.delete(target.absolutePath);
+      this.#holder.watchers.delete(watcher);
       await watcher.close();
       this.#forgetSubtree(target.absolutePath);
     }
@@ -208,6 +215,9 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
   async close(): Promise<void> {
     if (this.#state === "closed") return;
     this.#state = "closed";
+    // close() supersedes the backstop: stop tracking so the finalizer is a no-op.
+    leakRegistry.unregister(this);
+    this.#holder.watchers.clear();
 
     await Promise.all([...this.#watchers.values()].map((p) => p.close()));
     this.#watchers.clear();
@@ -239,6 +249,9 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
   async #start(): Promise<void> {
     if (this.#state !== "idle") return;
     this.#state = "starting";
+    // Backstop: if this Watcher is dropped without close(), the registry closes
+    // any handles still in #holder. `this` is also the unregister token.
+    leakRegistry.register(this, this.#holder, this);
 
     this.#ignore = IgnoreEngine.create(this.#root, this.#options.raw);
     this.#factory = new EventFactory(this.#root, this.#now);
@@ -323,6 +336,7 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
       },
     );
     this.#watchers.set(target.absolutePath, platform);
+    this.#holder.watchers.add(platform);
     await platform.start();
   }
 

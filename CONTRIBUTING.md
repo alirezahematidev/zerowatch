@@ -89,6 +89,18 @@ Common types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`,
 `chore`. A `!` after the type (or a `BREAKING CHANGE:` footer) marks a breaking
 change.
 
+## API docs (dev-only)
+
+The exhaustive symbol reference is generated from the source JSDoc + types with
+[typedoc](https://typedoc.org):
+
+```sh
+yarn docs:api
+```
+
+Output is written to `docs/api/` (gitignored — not committed). The hand-written
+[docs/API.md](docs/API.md) remains the narrative guide.
+
 ## Releasing (maintainers)
 
 Releases are cut with [release-it](https://github.com/release-it/release-it):
