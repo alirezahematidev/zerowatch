@@ -8,6 +8,7 @@ import { FileWatcher } from "./file-watcher.js";
 import { NativeRecursiveWatcher } from "./native-recursive-watcher.js";
 import { ManualRecursiveWatcher } from "./manual-recursive-watcher.js";
 import { PollingWatcher } from "./polling-watcher.js";
+import { WeakSink } from "./weak-sink.js";
 
 export { nativeRecursiveSupported, inodeMoveDetectionSupported } from "./capabilities.js";
 
@@ -33,11 +34,15 @@ export function createPlatformWatcher(
   shouldWatchDir: (absolutePath: string) => boolean,
   options: PlatformOptions,
 ): PlatformWatcher {
+  // Adapters reference the sink weakly so an active fs.watch handle never pins
+  // the owning Watcher — see WeakSink and the leak-safety FinalizationRegistry.
+  const weakSink = new WeakSink(sink);
+
   if (options.usePolling) {
     return new PollingWatcher(
       target.absolutePath,
       target.isDirectory && target.recursive,
-      sink,
+      weakSink,
       shouldWatchDir,
       target.followSymlinks,
       options.interval,
@@ -47,17 +52,17 @@ export function createPlatformWatcher(
   }
 
   if (!target.isDirectory) {
-    return new FileWatcher(target.absolutePath, sink);
+    return new FileWatcher(target.absolutePath, weakSink);
   }
 
   if (target.recursive && nativeRecursiveSupported) {
-    return new NativeRecursiveWatcher(target.absolutePath, sink);
+    return new NativeRecursiveWatcher(target.absolutePath, weakSink);
   }
 
   return new ManualRecursiveWatcher(
     target.absolutePath,
     target.recursive,
-    sink,
+    weakSink,
     shouldWatchDir,
   );
 }
