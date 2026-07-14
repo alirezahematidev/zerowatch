@@ -101,6 +101,11 @@ yarn docs:api
 Output is written to `docs/api/` (gitignored — not committed). The hand-written
 [docs/API.md](docs/API.md) remains the narrative guide.
 
+On every push to `main`, the `API docs` workflow regenerates the site and
+publishes it to GitHub Pages at
+<https://alirezahematidev.github.io/zerowatch/>. So the generated reference is
+never committed — it is always rebuilt from source and deployed by CI.
+
 ## Releasing (maintainers)
 
 Releases are cut with [release-it](https://github.com/release-it/release-it):
