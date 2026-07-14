@@ -17,7 +17,10 @@ export interface WatcherHolder {
 export function closeLeakedWatchers(holder: WatcherHolder): void {
   for (const watcher of holder.watchers) {
     try {
-      void watcher.close();
+      // close() may be async; swallow both synchronous throws and rejected
+      // promises — a FinalizationRegistry callback must never throw, and an
+      // unhandled rejection from here could crash a strict process.
+      Promise.resolve(watcher.close()).catch(() => {});
     } catch {
       // A FinalizationRegistry callback must never throw.
     }

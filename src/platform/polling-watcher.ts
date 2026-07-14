@@ -117,6 +117,16 @@ export class PollingWatcher implements PlatformWatcher {
     const found = new Map<string, PollEntry>();
     const stack: string[] = [this.#root];
     const seenDirs = new Set<string>();
+    // Guard against symlink cycles: track the dev:inode of every directory we
+    // descend into so a link that points back into the tree (e.g. `a/self -> a`)
+    // does not send the walk into an unbounded loop. Mirrors the scanner.
+    const seenInodes = new Set<string>();
+    try {
+      const rootStats = await fsp.stat(this.#root);
+      seenInodes.add(`${rootStats.dev}:${rootStats.ino}`);
+    } catch {
+      // Root unreadable — the readdir below will handle it.
+    }
 
     while (stack.length > 0) {
       const dir = stack.pop()!;
@@ -147,7 +157,11 @@ export class PollingWatcher implements PlatformWatcher {
           const stats = isLink ? await fsp.stat(abs) : await fsp.lstat(abs);
           if (stats.isDirectory()) {
             found.set(abs, { mtimeMs: stats.mtimeMs, size: stats.size });
-            if (this.#recursive && this.#shouldWatchDir(abs)) stack.push(abs);
+            const inode = `${stats.dev}:${stats.ino}`;
+            if (this.#recursive && this.#shouldWatchDir(abs) && !seenInodes.has(inode)) {
+              seenInodes.add(inode);
+              stack.push(abs);
+            }
           } else if (stats.isFile()) {
             found.set(abs, { mtimeMs: stats.mtimeMs, size: stats.size });
           }

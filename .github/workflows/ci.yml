@@ -11,6 +11,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege: CI only needs to read the repo.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: test (${{ matrix.os }}, node ${{ matrix.node }})
@@ -54,6 +58,12 @@ jobs:
           cache: yarn
       - run: yarn install --frozen-lockfile
       - run: yarn test:coverage
+      # Exercise the leak-safety FinalizationRegistry, which only runs when GC
+      # is exposed (skipped in the matrix job above where it is not).
+      - name: Leak safety-net (GC exposed)
+        run: yarn vitest run test/leak.test.ts
+        env:
+          NODE_OPTIONS: --expose-gc
       - uses: actions/upload-artifact@v4
         with:
           name: coverage

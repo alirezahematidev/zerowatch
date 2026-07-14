@@ -30,7 +30,12 @@ import { relativeTo } from "../utils/paths.js";
 /** Internal lifecycle states. */
 type State = "idle" | "starting" | "ready" | "closed";
 
-/** The unit yielded by the async iterator: single events, or arrays when batching. */
+/**
+ * The unit yielded by the async iterator: single events, or arrays when
+ * batching is enabled via {@link WatchOptions.batch}.
+ *
+ * @category Watcher
+ */
 export type EmittedUnit = WatchEvent | WatchEvent[];
 
 /**
@@ -41,6 +46,20 @@ export type EmittedUnit = WatchEvent | WatchEvent[];
  *
  * `T` is the async-iterator element type: {@link WatchEvent} normally, or
  * `WatchEvent[]` when `batch` is enabled.
+ *
+ * Construct one via {@link watch} or {@link createWatcher} rather than directly.
+ *
+ * @category Watcher
+ * @example
+ * ```ts
+ * const watcher = watch("src");
+ * watcher.on("all", (e) => console.log(e.type, e.relativePath));
+ * await watcher.ready();          // initial scan complete, now live
+ * await watcher.add("tests");     // watch more paths on the fly
+ * watcher.pause();                // buffer events…
+ * watcher.resume();               // …and flush them
+ * await watcher.close();          // release handles, end iteration
+ * ```
  */
 export class Watcher<T extends EmittedUnit = WatchEvent>
   implements AsyncIterable<T>
@@ -207,6 +226,9 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
       this.#watchers.delete(target.absolutePath);
       this.#holder.watchers.delete(watcher);
       await watcher.close();
+      // Drop any in-flight holds for the subtree so no event is delivered for a
+      // path the caller explicitly stopped watching.
+      this.#cancelHoldsUnder(target.absolutePath);
       this.#forgetSubtree(target.absolutePath);
     }
   }
@@ -363,6 +385,17 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
     for (const raw of buffered) this.#processRaw(raw);
   }
 
+  /** Cancel pipeline holds (write-stability, debounce, move pairing) for a subtree. */
+  #cancelHoldsUnder(absolutePath: string): void {
+    const prefix = `${absolutePath}${path.sep}`;
+    const altPrefix = `${absolutePath}/`;
+    const isUnder = (abs: string): boolean =>
+      abs === absolutePath || abs.startsWith(prefix) || abs.startsWith(altPrefix);
+    this.#stabilizer?.cancelUnder(isUnder);
+    this.#debouncer.cancelUnder(isUnder);
+    this.#moveDetector.cancelUnder(isUnder);
+  }
+
   /** Forget every tracked entry at or beneath `absolutePath` (used by unwatch). */
   #forgetSubtree(absolutePath: string): void {
     const prefix = `${absolutePath}${path.sep}`;
@@ -386,7 +419,11 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
       (error) => this.#reportError(error),
     );
     for (const [abs, entry] of entries) {
-      if (!this.#snapshot.has(abs)) this.#snapshot.set(abs, entry);
+      // Only genuinely new entries get seeded — and only they emit an initial
+      // create. Re-seeding an overlapping subtree (e.g. add() of a path already
+      // covered by a recursive watch) must not re-announce known entries.
+      if (this.#snapshot.has(abs)) continue;
+      this.#snapshot.set(abs, entry);
       if (!this.#options.ignoreInitial) {
         const event = this.#factory.create("create", abs, entry.isDirectory);
         this.#dispatch(event);

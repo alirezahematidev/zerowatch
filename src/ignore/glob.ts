@@ -44,9 +44,18 @@ function globToRegExpSource(pattern: string): string {
     const next = chars[i + 1];
 
     if (char === "*") {
-      if (next === "*") {
-        // `**` — consume the pair and an optional following slash so that
-        // `**/foo` also matches a top-level `foo`.
+      // `**` is special (crosses directories) only as a *whole* path segment —
+      // bounded by `/` or the pattern's edges on both sides. Glued to other
+      // characters (e.g. `a**b`) it degrades to a regular `*` per glob spec.
+      const prev = chars[i - 1];
+      const afterPair = chars[i + 2];
+      const isSegmentGlobstar =
+        next === "*" &&
+        (prev === undefined || prev === "/") &&
+        (afterPair === undefined || afterPair === "/");
+      if (isSegmentGlobstar) {
+        // Consume the pair and an optional following slash so that `**/foo`
+        // also matches a top-level `foo`.
         i++;
         if (chars[i + 1] === "/") {
           i++;
@@ -106,12 +115,29 @@ function compileClass(
   let closed = false;
   for (; j < chars.length; j++) {
     const c = chars[j]!;
+    if (c === "\\") {
+      // Escaped member: take the next char literally, so `\]` is a literal `]`
+      // rather than the class terminator.
+      const escaped = chars[j + 1];
+      if (escaped === undefined) {
+        body += "\\\\";
+        continue;
+      }
+      j++;
+      if (escaped === "/") continue; // a class never matches the path separator
+      body +=
+        escaped === "]" || escaped === "\\" || escaped === "^" || escaped === "-"
+          ? `\\${escaped}`
+          : escaped;
+      continue;
+    }
     if (c === "]") {
       closed = true;
       break;
     }
-    // Inside a class only `\` and `]` need escaping; `/` is excluded implicitly.
-    body += c === "\\" ? "\\\\" : c;
+    // A glob character class can never match the path separator.
+    if (c === "/") continue;
+    body += c;
   }
   if (!closed || body === "") return null;
   return { source: `[${negate ? "^" : ""}${body}]`, endIndex: j };

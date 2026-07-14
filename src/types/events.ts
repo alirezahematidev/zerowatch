@@ -2,6 +2,13 @@
  * The normalized set of filesystem event types emitted by zerowatch.
  *
  * All platform-specific native events are reduced to exactly these four kinds.
+ *
+ * - `create` — a new file or directory appeared.
+ * - `change` — an existing file's contents changed.
+ * - `delete` — a file or directory was removed.
+ * - `move` — an entry was renamed/moved; see {@link WatchEvent.oldPath}.
+ *
+ * @category Events
  */
 export type WatchEventType = "create" | "change" | "delete" | "move";
 
@@ -11,6 +18,18 @@ export type WatchEventType = "create" | "change" | "delete" | "move";
  * `path`, `absolutePath` and `relativePath` all point at the *current* location
  * of the entry. For `move` events that means the destination; the origin is
  * available on {@link WatchEvent.oldPath}.
+ *
+ * @category Events
+ * @example
+ * ```ts
+ * watcher.on("all", (event: WatchEvent) => {
+ *   if (event.type === "move") {
+ *     console.log(`moved ${event.oldPath} -> ${event.absolutePath}`);
+ *   } else {
+ *     console.log(`${event.type}: ${event.relativePath}`);
+ *   }
+ * });
+ * ```
  */
 export interface WatchEvent {
   /** The normalized kind of change. */
@@ -42,6 +61,8 @@ export interface WatchEvent {
  * An error surfaced by a watcher. Watchers never throw asynchronously and never
  * crash the process on recoverable errors (e.g. `EACCES`, `EPERM`); instead the
  * error is delivered through the `error` event.
+ *
+ * @category Events
  */
 export interface WatchError extends Error {
   /** The underlying errno code when available (e.g. `EACCES`). */

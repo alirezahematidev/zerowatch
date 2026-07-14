@@ -82,6 +82,18 @@ export class WriteStabilizer {
     }
   }
 
+  /**
+   * Cancel pending stabilizations whose path satisfies `isUnder` (used by
+   * `unwatch()` to discard held writes for a forgotten subtree).
+   */
+  cancelUnder(isUnder: (absolutePath: string) => boolean): void {
+    for (const [path, entry] of this.#pending) {
+      if (!isUnder(path)) continue;
+      clearTimeout(entry.timer);
+      this.#pending.delete(path);
+    }
+  }
+
   /** Cancel everything (used on close). */
   clear(): void {
     for (const entry of this.#pending.values()) clearTimeout(entry.timer);

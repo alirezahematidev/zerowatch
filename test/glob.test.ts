@@ -55,4 +55,24 @@ describe("compileGlob", () => {
     expect(m.test("a.b+c(d).ts")).toBe(true);
     expect(m.test("aXbXcXdX.ts")).toBe(false);
   });
+
+  it("does not let ** cross a slash unless it is a whole path segment", () => {
+    // `a**b` is not a full `**` segment, so it behaves like `a*b` (no slash).
+    const m = compileGlob("a**b");
+    expect(m.test("axyzb")).toBe(true);
+    expect(m.test("ax/yb")).toBe(false);
+  });
+
+  it("honors an escaped ] inside a character class", () => {
+    const m = compileGlob("file[a\\]b].txt");
+    expect(m.test("filea.txt")).toBe(true);
+    expect(m.test("file].txt")).toBe(true);
+    expect(m.test("fileb.txt")).toBe(true);
+    expect(m.test("filec.txt")).toBe(false);
+  });
+
+  it("never matches a path separator via a character class", () => {
+    const m = compileGlob("[a/b]");
+    expect(m.test("/")).toBe(false);
+  });
 });
