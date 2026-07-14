@@ -63,12 +63,17 @@ describe("bug: unwatch() leaves in-flight holds active", () => {
   });
 });
 
-describe("bug: polling walk explodes on a symlink cycle", () => {
+// Creating symlinks needs elevated privileges on Windows; skip there.
+describe.skipIf(process.platform === "win32")("bug: polling walk explodes on a symlink cycle", () => {
   it("does not descend into a symlinked directory that loops back into the tree", async () => {
     const dir = makeDir();
     mkdirSync(join(dir, "sub"));
     writeFileSync(join(dir, "sub", "a.txt"), "x");
-    symlinkSync(dir, join(dir, "loop")); // loop -> dir: a cycle
+    try {
+      symlinkSync(dir, join(dir, "loop")); // loop -> dir: a cycle
+    } catch {
+      return; // symlink creation unsupported in this environment
+    }
 
     const events: WatchEvent[] = [];
     const w = track(
