@@ -51,6 +51,20 @@ export class Debouncer {
     for (const event of pending) this.#emit(event);
   }
 
+  /**
+   * Drop pending events whose path satisfies `isUnder`, without emitting them.
+   * Used by `unwatch()` to discard held events for a forgotten subtree.
+   */
+  cancelUnder(isUnder: (absolutePath: string) => boolean): void {
+    for (const [key, event] of this.#pending) {
+      if (!isUnder(event.absolutePath)) continue;
+      const timer = this.#timers.get(key);
+      if (timer) clearTimeout(timer);
+      this.#timers.delete(key);
+      this.#pending.delete(key);
+    }
+  }
+
   /** Drop all pending events without emitting them. */
   clear(): void {
     for (const timer of this.#timers.values()) clearTimeout(timer);

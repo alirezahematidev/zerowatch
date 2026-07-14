@@ -69,6 +69,19 @@ export class MoveDetector {
     this.#pendingByIno.set(ino, { event, ino, timer });
   }
 
+  /**
+   * Drop pending (unpaired) events whose path satisfies `isUnder`, without
+   * emitting them. Used by `unwatch()` to discard held halves for a forgotten
+   * subtree.
+   */
+  cancelUnder(isUnder: (absolutePath: string) => boolean): void {
+    for (const [ino, pending] of this.#pendingByIno) {
+      if (!isUnder(pending.event.absolutePath)) continue;
+      clearTimeout(pending.timer);
+      this.#pendingByIno.delete(ino);
+    }
+  }
+
   /** Drop all pending events without emitting them. */
   clear(): void {
     for (const pending of this.#pendingByIno.values()) clearTimeout(pending.timer);
