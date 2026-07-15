@@ -63,6 +63,7 @@ interface CreateWatcherOptions extends WatchOptions {
 | `debounce` | `number` | `0` | Coalesce duplicate `(type, path)` events within this many ms. |
 | `batch` | `number` | `0` | Deliver `WatchEvent[]` per window of this many ms. |
 | `gitignore` | `boolean` | `false` | Honor `.gitignore` files (root and nested). |
+| `ignoreHidden` | `boolean` | `false` | Ignore dotfiles/dot-folders (`.git`, `.env`, …) at any depth, pruning their subtrees. |
 | `awaitWrite` | `boolean \| AwaitWriteOptions` | `false` | Hold `create`/`change` until file size is stable. |
 | `followSymlinks` | `boolean` | `false` | Follow symlinks while scanning/watching. |
 | `ignoreInitial` | `boolean` | `false` | Suppress synthetic `create` events for pre-existing entries. |

@@ -464,6 +464,28 @@ describe("ignore-engine: absolute-path globs match (L3)", () => {
   });
 });
 
+describe("ignore-engine: ignoreHidden option", () => {
+  const root = path.resolve("/tmp/zerowatch-hidden");
+
+  it("prunes dotfiles and dot-folders (incl .git) at any depth when enabled", () => {
+    const eng = IgnoreEngine.create(root, { ignoreHidden: true });
+    expect(eng.ignoresDirectory(path.join(root, ".git"))).toBe(true);
+    expect(eng.ignoresFile(path.join(root, ".git", "HEAD"))).toBe(true);
+    expect(eng.ignoresFile(path.join(root, ".env"))).toBe(true);
+    expect(eng.ignoresFile(path.join(root, "src", ".secret"))).toBe(true);
+    expect(eng.ignoresDirectory(path.join(root, "src", ".cache"))).toBe(true);
+    // Non-hidden entries are unaffected.
+    expect(eng.ignoresFile(path.join(root, "src", "index.ts"))).toBe(false);
+    expect(eng.ignoresDirectory(path.join(root, "src"))).toBe(false);
+  });
+
+  it("keeps hidden entries when disabled (the default)", () => {
+    const eng = IgnoreEngine.create(root, {});
+    expect(eng.ignoresDirectory(path.join(root, ".git"))).toBe(false);
+    expect(eng.ignoresFile(path.join(root, ".env"))).toBe(false);
+  });
+});
+
 describe("polling backend keeps the process alive (H2)", () => {
   it("its scheduling timer references the event loop (like the native backends)", async () => {
     const { dir, cleanup } = tempDir();

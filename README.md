@@ -120,6 +120,7 @@ watch("src", {
   debounce: 100,            // collapse rapid duplicate events (ms)
   batch: 200,               // deliver WatchEvent[] per window (ms)
   gitignore: true,          // honor .gitignore files
+  ignoreHidden: false,      // ignore dotfiles/dot-folders (.git, .env, …) at any depth
   awaitWrite: true,         // wait until files stop being written before emitting
   followSymlinks: false,    // follow symlinks while scanning/watching (cycle-safe)
   ignoreInitial: false,     // suppress synthetic creates for existing entries

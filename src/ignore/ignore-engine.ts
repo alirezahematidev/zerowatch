@@ -27,6 +27,7 @@ export class IgnoreEngine {
   readonly #predicates: IgnoreFunction[];
   readonly #gitignore: GitignoreSet | null;
   readonly #extensions: Set<string> | null;
+  readonly #ignoreHidden: boolean;
   /** Memoizes whether a directory (by absolute path) lies under an ignored ancestor. */
   readonly #ancestorCache = new Map<string, boolean>();
 
@@ -36,12 +37,14 @@ export class IgnoreEngine {
     predicates: IgnoreFunction[],
     gitignore: GitignoreSet | null,
     extensions: Set<string> | null,
+    ignoreHidden: boolean,
   ) {
     this.#root = root;
     this.#globs = globs;
     this.#predicates = predicates;
     this.#gitignore = gitignore;
     this.#extensions = extensions;
+    this.#ignoreHidden = ignoreHidden;
   }
 
   /** Build an engine from resolved options and the absolute watched root. */
@@ -52,7 +55,17 @@ export class IgnoreEngine {
       options.extensions && options.extensions.length > 0
         ? new Set(options.extensions.map(normalizeExtension))
         : null;
-    return new IgnoreEngine(root, globs, predicates, gitignore, extensions);
+    return new IgnoreEngine(root, globs, predicates, gitignore, extensions, options.ignoreHidden ?? false);
+  }
+
+  /**
+   * True when `ignoreHidden` is on and any segment of the root-relative path
+   * begins with a dot — so a dotfile, a dot-folder, or anything beneath one is
+   * hidden. A plain segment scan; no glob compilation or backtracking.
+   */
+  #isHidden(relPosix: string): boolean {
+    if (!this.#ignoreHidden) return false;
+    return relPosix.split("/").some((seg) => seg.length > 0 && seg[0] === ".");
   }
 
   /** Merge a nested `.gitignore` (discovered while scanning) into the engine. */
@@ -71,6 +84,7 @@ export class IgnoreEngine {
    */
   ignoresDirectory(absolutePath: string): boolean {
     const rel = relativeTo(this.#root, absolutePath);
+    if (this.#isHidden(rel)) return true;
     if (this.#matchesIgnoreRules(absolutePath, rel, true)) return true;
     return this.#ancestorIgnored(absolutePath);
   }
@@ -81,6 +95,7 @@ export class IgnoreEngine {
    */
   ignoresFile(absolutePath: string): boolean {
     const rel = relativeTo(this.#root, absolutePath);
+    if (this.#isHidden(rel)) return true;
     if (this.#matchesIgnoreRules(absolutePath, rel, false)) return true;
     if (this.#extensions && !this.#extensions.has(extname(absolutePath))) return true;
     return this.#ancestorIgnored(absolutePath);

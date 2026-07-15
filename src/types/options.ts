@@ -82,6 +82,12 @@ export interface WatchOptions {
    */
   gitignore?: boolean;
   /**
+   * Ignore hidden entries — any file or directory whose name begins with a dot
+   * (`.git`, `.env`, `.cache`, …) — at any depth, pruning their subtrees. A
+   * cheap segment check, not a glob. Default: `false`.
+   */
+  ignoreHidden?: boolean;
+  /**
    * Hold back `create`/`change` events for files until their size is stable,
    * so partially written files are never reported. Pass `true` for defaults or
    * an object to tune thresholds. Default: `false`.
