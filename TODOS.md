@@ -44,8 +44,8 @@ Nothing open right now.
   the event stream; the browser controls the watcher over WebSocket (root, ignore
   globs/`.gitignore`, `depth`, `awaitWrite`, polling, `maxBufferedEvents`, pause/
   resume). Friction fed back: `maxBufferedEvents` drops were silent — added a public
-  `drop` event to zerowatch (see the `feat/drop-signal` branch) so the app can show
-  an accurate dropped-event count.
+  `drop` event to zerowatch (commit `ef42a32` on the `fix/production-hardening`
+  branch) so the app can show an accurate dropped-event count.
 
 ---
 
