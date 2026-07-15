@@ -89,6 +89,8 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
 
   #state: State = "idle";
   #paused = false;
+  /** Cumulative count of events dropped by the bounded queue (backpressure). */
+  #dropped = 0;
   readonly #pausedBuffer: WatchEvent[] = [];
   readonly #rawBuffer: RawFsEvent[] = [];
 
@@ -107,6 +109,13 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
     this.#root = this.#computeRoot();
     this.#queue = new AsyncQueue<EmittedUnit>({
       maxBuffered: this.#options.maxBufferedEvents,
+      // Surface backpressure: when a bounded buffer evicts an undelivered event,
+      // report the cumulative drop count so consumers can observe loss instead
+      // of it being silent. Guarded like other emissions — never crashes.
+      onDrop: () => {
+        this.#dropped += 1;
+        this.#emitter.emit("drop", { count: this.#dropped });
+      },
     });
 
     this.#readyPromise = new Promise<void>((resolve, reject) => {

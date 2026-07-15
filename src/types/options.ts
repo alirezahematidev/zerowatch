@@ -149,7 +149,8 @@ export interface WatchOptions {
   /**
    * Bound the async-iterator buffer to this many pending events (or batches).
    * When a consumer cannot keep up, the oldest buffered items are dropped to cap
-   * memory. `0` / omitted means unbounded. Listeners (`.on`) are unaffected.
+   * memory, and a `drop` event fires with the cumulative dropped count. `0` /
+   * omitted means unbounded. Listeners (`.on`) are unaffected.
    */
   maxBufferedEvents?: number;
   /**
@@ -181,6 +182,13 @@ export interface WatcherEventMap {
   all: (event: WatchEvent) => void;
   /** Fires once per batch window when `batch` is enabled. */
   batch: (events: WatchEvent[]) => void;
+  /**
+   * Fires when the bounded async-iterator buffer (`maxBufferedEvents`) drops an
+   * event because the consumer could not keep up. `count` is the cumulative
+   * number of events dropped over the watcher's lifetime. Only meaningful when
+   * `maxBufferedEvents > 0`; listeners (`.on`) themselves are never dropped.
+   */
+  drop: (info: { count: number }) => void;
   /** A recoverable error occurred; the watcher keeps running. */
   error: (error: Error) => void;
   /** The initial scan has completed and the watcher is live. */

@@ -160,6 +160,7 @@ Fully typed. Events:
 | `move` | `(e: WatchEvent) => void` | Entry renamed/moved (has `oldPath`). |
 | `all` | `(e: WatchEvent) => void` | Every event, regardless of type. |
 | `batch` | `(events: WatchEvent[]) => void` | Once per batch window (when `batch` is set). |
+| `drop` | `(info: { count: number }) => void` | An event was dropped from the bounded async-iterator buffer (`maxBufferedEvents`); `count` is cumulative. |
 | `error` | `(err: Error) => void` | Recoverable error; watcher keeps running. |
 | `ready` | `() => void` | Initial scan complete. |
 | `close` | `() => void` | Watcher fully closed. |
