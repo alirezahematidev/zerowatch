@@ -238,13 +238,20 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
     leakRegistry.unregister(this);
     this.#holder.watchers.clear();
 
-    await Promise.all([...this.#watchers.values()].map((p) => p.close()));
+    // `allSettled`, not `all`: a platform adapter's close() rejecting must not
+    // skip the pipeline teardown below and leave the async iterator hanging.
+    await Promise.allSettled([...this.#watchers.values()].map((p) => p.close()));
     this.#watchers.clear();
 
     // Speculative holds (move pairing, write stability) are always dropped.
     this.#stabilizer?.clear();
     this.#moveDetector?.clear();
     if (this.#options.flushOnClose) {
+      // Deliver everything still held. Un-pause first and drain the paused
+      // buffer directly, otherwise the flush below would route back through the
+      // pause gate into #pausedBuffer and be silently dropped.
+      this.#paused = false;
+      for (const event of this.#pausedBuffer.splice(0)) this.#deliver(event);
       // Emit anything still delayed purely for coalescing.
       this.#debouncer?.flush();
       this.#batcher?.flush();
@@ -280,6 +287,7 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
       this.#factory,
       this.#options.followSymlinks,
       this.#options.hashChanges,
+      (error) => this.#reportError(error),
     );
     this.#moveDetector = new MoveDetector(
       this.#options.moveWindow,
@@ -448,12 +456,12 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
     const result = this.#classifier.classify(raw.absolutePath);
     if (!result) return;
 
-    const { event, ino, cascade } = result;
+    const { event, ino, dev, cascade, replacement } = result;
 
     // Deletes cancel any in-flight write stabilization.
     if (event.type === "delete") this.#stabilizer?.cancel(event.absolutePath);
 
-    this.#moveDetector.feed(event, ino);
+    this.#moveDetector.feed(event, ino, dev);
 
     // A brand-new directory may already contain files (e.g. `mkdir -p a/b`,
     // moved-in trees, or races before a manual watcher attaches). Scan it in.
@@ -464,9 +472,18 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
     if (cascade) {
       for (const child of cascade) {
         this.#stabilizer?.cancel(child.event.absolutePath);
-        // Feed the child's real inode so a moved-in counterpart can pair it into
-        // a move (bounded by moveWindow); otherwise it emits as a plain delete.
-        this.#moveDetector.feed(child.event, child.ino);
+        // Feed the child's real identity so a moved-in counterpart can pair it
+        // into a move (bounded by moveWindow); otherwise it emits as a plain delete.
+        this.#moveDetector.feed(child.event, child.ino, child.dev);
+      }
+    }
+
+    // A same-path type flip: emit the create of the replacement entry after the
+    // delete (+ cascade) above, mirroring the normal create handling.
+    if (replacement) {
+      this.#moveDetector.feed(replacement.event, replacement.ino, replacement.dev);
+      if (replacement.event.isDirectory && this.#options.recursive) {
+        void this.#scanNewDirectory(replacement.event.absolutePath);
       }
     }
   }
@@ -525,11 +542,15 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
       this.#ignore,
       (error) => this.#reportError(error),
     );
+    // A concurrent close() may have landed while the scan was in flight; bail so
+    // we neither mutate a closed watcher's snapshot nor deliver events (and
+    // schedule move/debounce timers) after the terminal `close` event.
+    if (this.#isClosed()) return;
     for (const [abs, entry] of entries) {
       if (this.#snapshot.has(abs)) continue;
       this.#snapshot.set(abs, entry);
       const event = this.#factory.create("create", abs, entry.isDirectory);
-      this.#moveDetector.feed(event, entry.ino);
+      this.#moveDetector.feed(event, entry.ino, entry.dev);
     }
   }
 

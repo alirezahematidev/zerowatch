@@ -22,10 +22,28 @@ function escapeLiteral(char: string): string {
   return REGEX_SPECIAL.test(char) ? `\\${char}` : char;
 }
 
+/** Options controlling how a glob is compiled. */
+export interface CompileGlobOptions {
+  /** Match case-insensitively (adds the `i` flag). Default: `false`. */
+  readonly caseInsensitive?: boolean;
+}
+
 /** Compile a single glob pattern into a matcher. */
-export function compileGlob(pattern: string): GlobMatcher {
+export function compileGlob(pattern: string, options: CompileGlobOptions = {}): GlobMatcher {
+  const flags = options.caseInsensitive ? "i" : "";
   const source = globToRegExpSource(pattern);
-  const regex = new RegExp(`^${source}$`);
+  let regex: RegExp;
+  try {
+    regex = new RegExp(`^${source}$`, flags);
+  } catch {
+    // A malformed pattern (e.g. an invalid character-class range like `[z-a]`
+    // or `[a-Z]`) must never crash watcher startup — the compile path runs
+    // outside the core's try/catch, so a throw here surfaces as an unhandled
+    // rejection. Fall back to matching the pattern as a literal string, which
+    // is well-defined and inert for real paths rather than crashing.
+    const literal = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    regex = new RegExp(`^${literal}$`, flags);
+  }
   return {
     source: pattern,
     test: (posixPath: string) => regex.test(posixPath),
@@ -36,27 +54,39 @@ function globToRegExpSource(pattern: string): string {
   let normalized = pattern;
   // A trailing slash (dir marker) also matches everything inside the dir.
   if (normalized.endsWith("/")) normalized = `${normalized}**`;
+  // Collapse consecutive globstar segments (`**/**` -> `**`) so a run of them
+  // compiles to a single group instead of many adjacent `(?:.*/)?`, which
+  // backtrack catastrophically (ReDoS). Semantically identical: "any dirs /
+  // any dirs" is just "any dirs".
+  while (normalized.includes("**/**")) {
+    normalized = normalized.replace(/\*\*\/\*\*/g, "**");
+  }
 
   let out = "";
   const chars = [...normalized];
   for (let i = 0; i < chars.length; i++) {
     const char = chars[i]!;
-    const next = chars[i + 1];
 
     if (char === "*") {
-      // `**` is special (crosses directories) only as a *whole* path segment —
-      // bounded by `/` or the pattern's edges on both sides. Glued to other
-      // characters (e.g. `a**b`) it degrades to a regular `*` per glob spec.
+      // Consume the entire run of consecutive `*` at once. A run of two or more
+      // that forms a whole path segment (bounded by `/` or the pattern edges)
+      // is a globstar and crosses directories; anything else — a lone `*`, or
+      // stars glued to other characters like `a**b` — degrades to a single
+      // `[^/]*`. Collapsing the run to ONE quantifier is what prevents the
+      // adjacent-`[^/]*` catastrophic backtracking.
+      let runEnd = i;
+      while (chars[runEnd + 1] === "*") runEnd++;
+      const starCount = runEnd - i + 1;
       const prev = chars[i - 1];
-      const afterPair = chars[i + 2];
-      const isSegmentGlobstar =
-        next === "*" &&
+      const afterRun = chars[runEnd + 1];
+      const isGlobstar =
+        starCount >= 2 &&
         (prev === undefined || prev === "/") &&
-        (afterPair === undefined || afterPair === "/");
-      if (isSegmentGlobstar) {
-        // Consume the pair and an optional following slash so that `**/foo`
-        // also matches a top-level `foo`.
-        i++;
+        (afterRun === undefined || afterRun === "/");
+      i = runEnd;
+      if (isGlobstar) {
+        // Consume an optional following slash so `**/foo` also matches a
+        // top-level `foo`.
         if (chars[i + 1] === "/") {
           i++;
           out += "(?:.*/)?";

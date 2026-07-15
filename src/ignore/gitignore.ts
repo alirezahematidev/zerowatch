@@ -15,6 +15,11 @@ interface GitignoreRule {
 
 export class GitignoreSet {
   readonly #rules: GitignoreRule[] = [];
+  readonly #caseInsensitive: boolean;
+
+  constructor(caseInsensitive = false) {
+    this.#caseInsensitive = caseInsensitive;
+  }
 
   /** True when at least one rule has been loaded. */
   get isEmpty(): boolean {
@@ -28,7 +33,7 @@ export class GitignoreSet {
    */
   add(contents: string, baseRelDir: string): void {
     for (const raw of contents.split(/\r?\n/)) {
-      const rule = parseLine(raw, baseRelDir);
+      const rule = parseLine(raw, baseRelDir, this.#caseInsensitive);
       if (rule) this.#rules.push(rule);
     }
   }
@@ -48,7 +53,7 @@ export class GitignoreSet {
   }
 }
 
-function parseLine(raw: string, baseRelDir: string): GitignoreRule | null {
+function parseLine(raw: string, baseRelDir: string, caseInsensitive: boolean): GitignoreRule | null {
   let line = raw;
   // Strip un-escaped trailing whitespace.
   line = line.replace(/(?<!\\)\s+$/, "");
@@ -76,7 +81,7 @@ function parseLine(raw: string, baseRelDir: string): GitignoreRule | null {
   const patterns = directoryOnly ? [`${core}/**`] : [core, `${core}/**`];
   return {
     negated,
-    matchers: patterns.map((p) => compileGlob(p)),
+    matchers: patterns.map((p) => compileGlob(p, { caseInsensitive })),
   };
 }
 
@@ -85,8 +90,8 @@ function parseLine(raw: string, baseRelDir: string): GitignoreRule | null {
  * first, so deeper files override shallower ones. Only the root file is loaded
  * eagerly here; nested files are discovered lazily by the scanner as it walks.
  */
-export function loadRootGitignore(root: string): GitignoreSet {
-  const set = new GitignoreSet();
+export function loadRootGitignore(root: string, caseInsensitive = false): GitignoreSet {
+  const set = new GitignoreSet(caseInsensitive);
   const file = path.join(root, ".gitignore");
   try {
     const contents = fs.readFileSync(file, "utf8");

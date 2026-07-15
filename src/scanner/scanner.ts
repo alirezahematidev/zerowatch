@@ -9,6 +9,8 @@ export interface FsEntry {
   readonly isDirectory: boolean;
   /** inode number, used for move detection (0 when unavailable). */
   readonly ino: number;
+  /** device id; paired with `ino` it is the entry's cross-mount identity. */
+  readonly dev: number;
   readonly size: number;
   readonly mtimeMs: number;
   /** inode change time — advances on content edits even when size/mtime don't. */
@@ -33,6 +35,7 @@ export function toEntry(absolutePath: string, stats: Stats): FsEntry {
     absolutePath,
     isDirectory: stats.isDirectory(),
     ino: Number(stats.ino),
+    dev: Number(stats.dev),
     size: stats.size,
     mtimeMs: stats.mtimeMs,
     ctimeMs: stats.ctimeMs,
@@ -67,10 +70,10 @@ export async function scan(
   // direct children are depth 0).
   const stack: Array<{ dir: string; depth: number }> = [{ dir: root, depth: 0 }];
   const visited = new Set<string>();
-  // Real dev:inode of every directory descended into, so a symlink (or hardlink)
-  // that loops back into the tree is walked at most once — no infinite recursion.
+  // Identity of every directory descended into, so a symlink (or hardlink) that
+  // loops back into the tree is walked at most once — no infinite recursion.
   const visitedInodes = new Set<string>();
-  visitedInodes.add(inodeKey(rootStats));
+  await visitDir(visitedInodes, root, rootStats, options.followSymlinks, onError);
 
   while (stack.length > 0) {
     const { dir, depth } = stack.pop()!;
@@ -91,9 +94,9 @@ export async function scan(
         entries.set(abs, toEntry(abs, stats));
         // Descend only while the children we'd find stay within maxDepth.
         if (options.recursive && depth < maxDepth) {
-          const key = inodeKey(stats);
-          if (visitedInodes.has(key)) continue; // symlink/hardlink cycle
-          visitedInodes.add(key);
+          if (await visitDir(visitedInodes, abs, stats, options.followSymlinks, onError)) {
+            continue; // already-seen identity: a symlink/hardlink cycle
+          }
           stack.push({ dir: abs, depth: depth + 1 });
         }
       } else if (stats.isFile()) {
@@ -109,6 +112,44 @@ export async function scan(
 /** Stable identity of a directory across symlinks: device id + inode number. */
 function inodeKey(stats: Stats): string {
   return `${stats.dev}:${stats.ino}`;
+}
+
+/**
+ * Record a directory's identity in `seen`; return `true` if it was already
+ * present (a cycle, skip it). Uses `dev:ino` normally. When the filesystem
+ * reports no usable inode (`0`, e.g. some SMB/FUSE/Windows shares), `dev:ino`
+ * would collapse every directory onto `dev:0` and drop the whole tree — so:
+ *   - while following symlinks, fall back to the canonical realpath, which
+ *     still bounds a symlink cycle (the only way an ino-less walk can loop);
+ *   - otherwise skip dedup entirely, since real directories cannot cycle.
+ */
+async function visitDir(
+  seen: Set<string>,
+  abs: string,
+  stats: Stats,
+  followSymlinks: boolean,
+  onError: (e: Error) => void,
+): Promise<boolean> {
+  let key: string;
+  if (stats.ino !== 0) {
+    key = inodeKey(stats);
+  } else if (followSymlinks) {
+    key = (await safeRealpath(abs, onError)) ?? abs;
+  } else {
+    return false;
+  }
+  if (seen.has(key)) return true;
+  seen.add(key);
+  return false;
+}
+
+async function safeRealpath(p: string, onError: (e: Error) => void): Promise<string | null> {
+  try {
+    return await fs.realpath(p);
+  } catch (error) {
+    reportIfUnexpected(error, onError);
+    return null;
+  }
 }
 
 async function resolveStats(

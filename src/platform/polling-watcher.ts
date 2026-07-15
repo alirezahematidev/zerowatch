@@ -70,9 +70,14 @@ export class PollingWatcher implements PlatformWatcher {
 
   #schedule(): void {
     if (this.#closed) return;
-    const timer = setTimeout(() => void this.#tick(), this.#interval);
-    timer.unref?.();
-    this.#timer = timer;
+    // Do NOT unref: the poll timer is this backend's primary watch mechanism and
+    // must keep the process alive, matching the native backends whose fs.watch
+    // handles use `persistent: true`. (The coalescing timers in the pipeline —
+    // debounce/batch/write-stability — are transient holds and stay unref'd.)
+    // The leak backstop is unaffected: this timer references the PollingWatcher,
+    // not the owning Watcher, so a dropped Watcher is still collected and its
+    // finalizer calls close(), which clears this timer.
+    this.#timer = setTimeout(() => void this.#tick(), this.#interval);
   }
 
   async #tick(): Promise<void> {
@@ -123,7 +128,8 @@ export class PollingWatcher implements PlatformWatcher {
     const seenInodes = new Set<string>();
     try {
       const rootStats = await fsp.stat(this.#root);
-      seenInodes.add(`${rootStats.dev}:${rootStats.ino}`);
+      const rootKey = await this.#cycleKey(this.#root, rootStats);
+      if (rootKey !== null) seenInodes.add(rootKey);
     } catch {
       // Root unreadable — the readdir below will handle it.
     }
@@ -157,10 +163,14 @@ export class PollingWatcher implements PlatformWatcher {
           const stats = isLink ? await fsp.stat(abs) : await fsp.lstat(abs);
           if (stats.isDirectory()) {
             found.set(abs, { mtimeMs: stats.mtimeMs, size: stats.size });
-            const inode = `${stats.dev}:${stats.ino}`;
-            if (this.#recursive && this.#shouldWatchDir(abs) && !seenInodes.has(inode)) {
-              seenInodes.add(inode);
-              stack.push(abs);
+            if (this.#recursive && this.#shouldWatchDir(abs)) {
+              const key = await this.#cycleKey(abs, stats);
+              if (key === null) {
+                stack.push(abs); // ino-less real dir: cannot cycle, descend freely
+              } else if (!seenInodes.has(key)) {
+                seenInodes.add(key);
+                stack.push(abs);
+              }
             }
           } else if (stats.isFile()) {
             found.set(abs, { mtimeMs: stats.mtimeMs, size: stats.size });
@@ -175,5 +185,21 @@ export class PollingWatcher implements PlatformWatcher {
 
   #isBinary(abs: string): boolean {
     return this.#binaryExtensions.has(extname(abs));
+  }
+
+  /**
+   * Cycle-dedup key for a directory: `dev:ino` normally; the canonical realpath
+   * when the fs reports no usable inode (`0`) and we're following symlinks (the
+   * only way an ino-less walk can loop); `null` to skip dedup entirely for an
+   * ino-less real-directory walk, which cannot cycle.
+   */
+  async #cycleKey(abs: string, stats: import("node:fs").Stats): Promise<string | null> {
+    if (stats.ino !== 0) return `${stats.dev}:${stats.ino}`;
+    if (!this.#followSymlinks) return null;
+    try {
+      return await fsp.realpath(abs);
+    } catch {
+      return abs;
+    }
   }
 }

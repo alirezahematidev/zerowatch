@@ -9,6 +9,13 @@ interface PendingWrite {
   lastSize: number;
   lastMtimeMs: number;
   ticks: number;
+  /**
+   * Identity of this pending entry. A poll callback captures it at schedule
+   * time and bails if the current entry for the path no longer matches, so a
+   * stat still in flight from a cancelled entry can never mutate the entry that
+   * replaced it (e.g. across an atomic-save delete+recreate).
+   */
+  token: number;
 }
 
 const DEFAULTS: Required<AwaitWriteOptions> = {
@@ -36,9 +43,17 @@ export class WriteStabilizer {
   readonly #onError: (error: Error) => void;
   readonly #pending = new Map<string, PendingWrite>();
   readonly #requiredStableTicks: number;
+  #nextToken = 0;
 
   constructor(options: boolean | AwaitWriteOptions, onError: (error: Error) => void) {
-    const resolved = typeof options === "object" ? { ...DEFAULTS, ...options } : { ...DEFAULTS };
+    const raw = typeof options === "object" ? { ...DEFAULTS, ...options } : { ...DEFAULTS };
+    // Coerce non-finite thresholds (e.g. NaN from JSON/env parsing) back to the
+    // defaults so the stability window can never become NaN — which would hold
+    // every file forever (`ticks >= NaN` is never true).
+    const resolved: Required<AwaitWriteOptions> = {
+      stabilityThreshold: Number.isFinite(raw.stabilityThreshold) ? raw.stabilityThreshold : DEFAULTS.stabilityThreshold,
+      pollInterval: Number.isFinite(raw.pollInterval) && raw.pollInterval > 0 ? raw.pollInterval : DEFAULTS.pollInterval,
+    };
     this.#options = resolved;
     this.#onError = onError;
     this.#requiredStableTicks = Math.max(1, Math.ceil(resolved.stabilityThreshold / resolved.pollInterval));
@@ -62,13 +77,15 @@ export class WriteStabilizer {
       return;
     }
 
+    const token = this.#nextToken++;
     const entry: PendingWrite = {
       event,
       emit,
-      timer: this.#schedule(() => this.#poll(event.absolutePath)),
+      timer: this.#schedule(() => this.#poll(event.absolutePath, token)),
       lastSize: -1,
       lastMtimeMs: -1,
       ticks: 0,
+      token,
     };
     this.#pending.set(event.absolutePath, entry);
   }
@@ -100,10 +117,12 @@ export class WriteStabilizer {
     this.#pending.clear();
   }
 
-  #poll(absolutePath: string): void {
+  #poll(absolutePath: string, token: number): void {
     fs.stat(absolutePath, (err, stats) => {
       const entry = this.#pending.get(absolutePath);
-      if (!entry) return; // cancelled while stat was in flight
+      // Bail if cancelled, or replaced by a fresh wait() while the stat was in
+      // flight — a stale callback must never drive the entry that superseded it.
+      if (!entry || entry.token !== token) return;
 
       if (err) {
         // File vanished mid-write (e.g. atomic rename away): drop silently; the
@@ -127,7 +146,7 @@ export class WriteStabilizer {
         entry.lastMtimeMs = stats.mtimeMs;
         entry.ticks = 0;
       }
-      entry.timer = this.#schedule(() => this.#poll(absolutePath));
+      entry.timer = this.#schedule(() => this.#poll(absolutePath, token));
     });
   }
 

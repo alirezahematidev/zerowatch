@@ -7,6 +7,7 @@ import {
   addNestedGitignore,
 } from "./gitignore.js";
 import { extname, normalizeExtension, relativeTo, toPosix } from "../utils/paths.js";
+import { caseInsensitiveFs } from "../platform/capabilities.js";
 
 /**
  * Central decision point for "should this path be watched / reported?".
@@ -46,7 +47,7 @@ export class IgnoreEngine {
   /** Build an engine from resolved options and the absolute watched root. */
   static create(root: string, options: WatchOptions): IgnoreEngine {
     const { globs, predicates } = splitIgnoreInput(options.ignore);
-    const gitignore = options.gitignore ? loadRootGitignore(root) : null;
+    const gitignore = options.gitignore ? loadRootGitignore(root, caseInsensitiveFs) : null;
     const extensions =
       options.extensions && options.extensions.length > 0
         ? new Set(options.extensions.map(normalizeExtension))
@@ -116,8 +117,12 @@ export class IgnoreEngine {
    */
   #matchesIgnoreRules(absolutePath: string, rel: string, isDirectory: boolean): boolean {
     const posix = toPosix(rel);
+    // Globs are compiled to match POSIX (`/`-separated) paths, so the absolute
+    // candidates must be normalized too — otherwise on Windows a backslash
+    // absolute path can never match a `/`-based absolute glob. No-op on POSIX.
+    const posixAbs = toPosix(absolutePath);
     const posixCandidates = isDirectory ? [posix, `${posix}/\0`] : [posix];
-    const absCandidates = isDirectory ? [absolutePath, `${absolutePath}/\0`] : [absolutePath];
+    const absCandidates = isDirectory ? [posixAbs, `${posixAbs}/\0`] : [posixAbs];
 
     for (const glob of this.#globs) {
       if (posixCandidates.some((c) => glob.test(c))) return true;
@@ -144,7 +149,7 @@ function splitIgnoreInput(input: IgnoreInput | undefined): {
   const items = Array.isArray(input) ? input : [input];
   for (const item of items) {
     if (typeof item === "function") predicates.push(item);
-    else globs.push(compileGlob(item));
+    else globs.push(compileGlob(item, { caseInsensitive: caseInsensitiveFs }));
   }
   return { globs, predicates };
 }

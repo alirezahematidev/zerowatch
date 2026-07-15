@@ -111,7 +111,7 @@ interface WatchEvent {
 watch("src", {
   recursive: true,          // recurse into subdirectories (default: true for dirs)
   ignore: [                 // glob strings and/or predicate functions
-    "**/*.log",
+    "**/*.log",             // matched case-insensitively on macOS/Windows
     "**/dist/**",
     "node_modules",         // a bare name prunes the whole subtree (all OSes)
     (abs, rel) => rel.startsWith("."),
@@ -138,6 +138,10 @@ watch("src", {
 
 See [docs/API.md](docs/API.md) for the full reference.
 
+> Ignore globs match **case-insensitively on macOS/Windows** and case-sensitively
+> on Linux, consistent with the filesystem and the `extensions` allow-list.
+> Non-finite numeric options (`NaN`/`Infinity`) fall back to their defaults.
+
 ### Dynamic watching
 
 Add or remove targets on a live watcher, and inspect what's currently tracked:
@@ -160,6 +164,9 @@ more than latency:
 ```ts
 watch("/mnt/nfs/project", { usePolling: true, interval: 300 });
 ```
+
+Like the native backend, a polling watcher keeps the Node process alive until
+you call `close()`.
 
 ### Batching changes the iterator type
 

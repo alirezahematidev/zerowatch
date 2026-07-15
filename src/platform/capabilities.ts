@@ -17,3 +17,13 @@ export const nativeRecursiveSupported: boolean =
  * synthesized and less dependable, so we degrade to delete+create there.
  */
 export const inodeMoveDetectionSupported: boolean = os.platform() !== "win32";
+
+/**
+ * Whether the platform's default filesystem is case-insensitive. macOS (APFS/
+ * HFS+ default) and Windows (NTFS) compare names case-insensitively, so ignore
+ * globs are matched case-insensitively there to stay consistent with the OS and
+ * with the always-case-insensitive extension allow-list. Linux (ext4, etc.) is
+ * case-sensitive. This is a platform heuristic; an individual volume may differ.
+ */
+export const caseInsensitiveFs: boolean =
+  os.platform() === "darwin" || os.platform() === "win32";

@@ -43,6 +43,16 @@ export interface ResolvedOptions {
   readonly raw: WatchOptions;
 }
 
+/**
+ * Coerce a user-supplied numeric option to a finite number, falling back to
+ * `fallback` for `undefined`, `null`, `NaN`, and `±Infinity`. Guards against a
+ * misconfigured value (often arriving via JSON/env parsing, which TypeScript
+ * cannot catch) silently spinning the CPU or dropping every event downstream.
+ */
+function finiteOr(value: number | undefined, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
 /** Apply documented defaults to user-supplied options. */
 export function resolveOptions(options: WatchOptions, cwd: string): ResolvedOptions {
   const awaitWrite =
@@ -52,27 +62,29 @@ export function resolveOptions(options: WatchOptions, cwd: string): ResolvedOpti
         ? false
         : options.awaitWrite;
 
-  const interval = Math.max(1, options.interval ?? 500);
+  const interval = Math.max(1, finiteOr(options.interval, 500));
 
   return {
     recursive: options.recursive ?? true,
-    debounce: Math.max(0, options.debounce ?? 0),
-    batch: Math.max(0, options.batch ?? 0),
+    debounce: Math.max(0, finiteOr(options.debounce, 0)),
+    batch: Math.max(0, finiteOr(options.batch, 0)),
     gitignore: options.gitignore ?? false,
     awaitWrite,
     followSymlinks: options.followSymlinks ?? false,
     ignoreInitial: options.ignoreInitial ?? false,
     cwd: options.cwd ?? cwd,
-    moveWindow: Math.max(0, options.moveWindow ?? 100),
+    moveWindow: Math.max(0, finiteOr(options.moveWindow, 100)),
     flushOnClose: options.flushOnClose ?? false,
     usePolling: options.usePolling ?? false,
     interval,
-    binaryInterval: Math.max(1, options.binaryInterval ?? interval),
+    binaryInterval: Math.max(1, finiteOr(options.binaryInterval, interval)),
     binaryExtensions: new Set(
       (options.binaryExtensions ?? DEFAULT_BINARY_EXTENSIONS).map(normalizeExtension),
     ),
-    depth: options.depth === undefined ? Infinity : Math.max(0, options.depth),
-    maxBufferedEvents: Math.max(0, options.maxBufferedEvents ?? 0),
+    // `depth` is unlimited by default; a non-finite value (NaN/Infinity) means
+    // "unlimited" rather than 0 (which would silently drop every event).
+    depth: options.depth === undefined ? Infinity : Math.max(0, finiteOr(options.depth, Infinity)),
+    maxBufferedEvents: Math.max(0, finiteOr(options.maxBufferedEvents, 0)),
     hashChanges: options.hashChanges ?? false,
     raw: options,
   };

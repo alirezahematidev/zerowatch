@@ -58,7 +58,7 @@ interface CreateWatcherOptions extends WatchOptions {
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `recursive` | `boolean` | `true` | Recurse into subdirectories (directory targets only). |
-| `ignore` | `string \| IgnoreFunction \| Array<string \| IgnoreFunction>` | — | Glob patterns and/or predicates to ignore. |
+| `ignore` | `string \| IgnoreFunction \| Array<string \| IgnoreFunction>` | — | Glob patterns and/or predicates to ignore. Globs match case-insensitively on macOS/Windows, case-sensitively on Linux (see below). |
 | `extensions` | `string[]` | — | Allow-list of file extensions (with or without leading dot). |
 | `debounce` | `number` | `0` | Coalesce duplicate `(type, path)` events within this many ms. |
 | `batch` | `number` | `0` | Deliver `WatchEvent[]` per window of this many ms. |
@@ -67,6 +67,17 @@ interface CreateWatcherOptions extends WatchOptions {
 | `followSymlinks` | `boolean` | `false` | Follow symlinks while scanning/watching. |
 | `ignoreInitial` | `boolean` | `false` | Suppress synthetic `create` events for pre-existing entries. |
 | `cwd` | `string` | `process.cwd()` | Base directory for relative paths. |
+| `moveWindow` | `number` | `100` | Window (ms) to pair a `delete`+`create` sharing a `dev:ino` identity into a `move`. |
+| `flushOnClose` | `boolean` | `false` | On `close()`, flush debounce/batch buffers instead of dropping them. |
+| `usePolling` | `boolean` | `false` | Use periodic `stat` scans instead of native `fs.watch`. Keeps the process alive like the native backend. |
+| `interval` | `number` | `500` | Poll interval (ms) when `usePolling` is set. |
+| `binaryInterval` | `number` | `interval` | Separate, usually slower poll interval (ms) for binary files. |
+| `binaryExtensions` | `string[]` | built-in set | Extensions treated as "binary" for `binaryInterval`. |
+| `depth` | `number` | `∞` | Max recursion depth relative to each root (`0` = direct entries only). |
+| `maxBufferedEvents` | `number` | `0` | Bound the async-iterator buffer (or batches); oldest dropped when exceeded. `0` = unbounded. |
+| `hashChanges` | `boolean` | `false` | Detect edits that leave size/mtime/ctime unchanged by hashing contents. |
+
+> **Numeric options are validated.** A non-finite value (`NaN`, `Infinity`) — e.g. from JSON/env parsing — falls back to the documented default instead of spinning the poll loop or silently dropping every event.
 
 ### `AwaitWriteOptions`
 
@@ -82,6 +93,17 @@ type IgnoreFunction = (absolutePath: string, relativePath: string) => boolean;
 ```
 
 Return `true` to ignore the entry. For directories, returning `true` also prevents descending into them.
+
+### Ignore matching
+
+- **Case sensitivity.** Glob patterns (and `.gitignore` rules) match
+  case-insensitively on case-insensitive filesystems (macOS APFS/HFS+, Windows
+  NTFS) and case-sensitively on Linux — consistent with the OS and with the
+  always-case-insensitive `extensions` allow-list. Predicate functions receive
+  the raw path and decide for themselves.
+- **Safety.** Glob compilation collapses redundant `**`/`*` runs so no pattern
+  can trigger catastrophic regex backtracking, and a malformed pattern falls
+  back to a literal match rather than throwing.
 
 ---
 

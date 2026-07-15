@@ -53,7 +53,10 @@ export interface WatchOptions {
   /**
    * Patterns and/or predicates describing entries to ignore. Glob strings
    * support `*`, `**`, `?` and character classes and are matched against the
-   * path relative to the watched root as well as the absolute path.
+   * path relative to the watched root as well as the absolute path. Matching is
+   * case-insensitive on case-insensitive filesystems (macOS, Windows) and
+   * case-sensitive on Linux, mirroring the OS and the `extensions` allow-list.
+   * A malformed pattern never throws — it falls back to matching literally.
    */
   ignore?: IgnoreInput;
   /**
@@ -114,12 +117,14 @@ export interface WatchOptions {
    * Use a polling backend (periodic `fs.stat` scans) instead of native
    * `fs.watch`. Slower and more CPU-hungry, but reliable on network filesystems,
    * some Docker bind mounts, and other environments where `fs.watch` misfires.
-   * Default: `false`.
+   * Like the native backend, an active polling watcher keeps the Node process
+   * alive until `close()` is called. Default: `false`.
    */
   usePolling?: boolean;
   /**
    * Poll interval (ms) for the polling backend. Only used when `usePolling` is
-   * `true`. Default: `500`.
+   * `true`. Default: `500`. A non-finite value (`NaN`/`Infinity`) falls back to
+   * the default rather than spinning the poll loop.
    */
   interval?: number;
   /**
@@ -137,7 +142,8 @@ export interface WatchOptions {
   binaryExtensions?: string[];
   /**
    * Maximum recursion depth relative to each watched root. `0` watches only the
-   * root's direct entries; omitted means unlimited.
+   * root's direct entries; omitted means unlimited. A non-finite value
+   * (`NaN`/`Infinity`) is treated as unlimited rather than dropping all events.
    */
   depth?: number;
   /**
