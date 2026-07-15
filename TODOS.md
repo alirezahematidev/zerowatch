@@ -30,17 +30,22 @@ multi-root depth semantics are requested.
 
 ## ▶ Planned
 
-- [ ] **`virtual-fs` dogfooding project** — build a realistic, standalone app at
-  `~/Desktop/projects/virtual-fs`: a React + Node.js **virtual file manager** for a
-  given source directory. Its core (live tree, change/create/delete/move reflection,
-  ignore rules, move detection, debounce/batch, backpressure) must be implemented
-  **entirely on top of `zerowatch`**, exercising the library's full public API as a
-  real end-to-end consumer. Serves two goals: (1) a thorough real-workload test of
-  `zerowatch` beyond the unit/bench suite, and (2) a genuine second project.
-  *Scope:* Node backend that watches the source dir via `zerowatch` and streams
-  normalized events (WS/SSE) to a React UI that renders the live file tree; cover
-  ignore globs/`.gitignore`, `depth`, `move` rendering, `awaitWrite`, and
-  `maxBufferedEvents`. Feed any friction found back into `zerowatch` as issues/fixes.
+Nothing open right now.
+
+---
+
+## ✅ Done
+
+- [x] **`virtual-fs` dogfooding project** — built at `~/Desktop/projects/virtual-fs`:
+  a React + Node **virtual file manager** whose whole core (live tree,
+  create/change/delete/move, ignore rules, move detection, debounce/batch,
+  backpressure) runs entirely on `zerowatch`'s public API. A Node/`ws` server pumps
+  the watcher's **async iterator** to a React UI that rebuilds the tree purely from
+  the event stream; the browser controls the watcher over WebSocket (root, ignore
+  globs/`.gitignore`, `depth`, `awaitWrite`, polling, `maxBufferedEvents`, pause/
+  resume). Friction fed back: `maxBufferedEvents` drops were silent — added a public
+  `drop` event to zerowatch (see the `feat/drop-signal` branch) so the app can show
+  an accurate dropped-event count.
 
 ---
 
