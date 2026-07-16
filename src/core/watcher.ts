@@ -25,7 +25,9 @@ import { Batcher } from "../batch/batcher.js";
 import { WriteStabilizer } from "../scanner/write-stabilizer.js";
 import { scan, type FsEntry } from "../scanner/scanner.js";
 import { createPlatformWatcher, inodeMoveDetectionSupported } from "../platform/index.js";
-import { relativeTo } from "../utils/paths.js";
+import { relativeTo, toPosix } from "../utils/paths.js";
+import { compileGlob, isGlob, splitGlobBase, type GlobMatcher } from "../ignore/glob.js";
+import { caseInsensitiveFs } from "../platform/capabilities.js";
 
 /** Internal lifecycle states. */
 type State = "idle" | "starting" | "ready" | "closed";
@@ -211,7 +213,12 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
     if (this.#state !== "ready") await this.#readyPromise.catch(() => {});
     if (this.#isClosed()) return;
 
-    for (const target of this.#toTargets(list)) {
+    for (const raw of list) {
+      const resolved = this.#resolveTarget(raw);
+      // Grow the allow-list so the added target's entries pass; a glob target
+      // also begins enforcement (activation never reverts).
+      this.#ignore.extendScope(resolved.scopeGlobs, resolved.isGlob);
+      const target = resolved.platform;
       if (this.#watchers.has(target.absolutePath)) continue;
       await this.#startTarget(target);
       if (this.#isClosed()) return;
@@ -288,7 +295,13 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
     // any handles still in #holder. `this` is also the unregister token.
     leakRegistry.register(this, this.#holder, this);
 
-    this.#ignore = IgnoreEngine.create(this.#root, this.#options.raw);
+    // Resolve targets up front: glob targets contribute the scope allow-list the
+    // ignore engine needs at construction, and expand to the base dir we watch.
+    const resolved = this.#targets.map((raw) => this.#resolveTarget(raw));
+    const scopeGlobs = resolved.flatMap((r) => r.scopeGlobs);
+    const scopeActive = resolved.some((r) => r.isGlob);
+
+    this.#ignore = IgnoreEngine.create(this.#root, this.#options.raw, scopeGlobs, scopeActive);
     this.#factory = new EventFactory(this.#root, this.#now);
     this.#classifier = new EventClassifier(
       this.#snapshot,
@@ -325,7 +338,7 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
     };
 
     try {
-      const targets = this.#resolveTargets();
+      const targets = resolved.map((r) => r.platform);
       for (const target of targets) {
         // A concurrent close() may land while we await; abort so we neither
         // spin up further handles nor resurrect a closed watcher.
@@ -580,7 +593,12 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
   #computeRoot(): string {
     const cwd = this.#options.cwd;
     if (this.#targets.length === 1) {
-      const abs = path.resolve(cwd, this.#targets[0]!);
+      const raw = this.#targets[0]!;
+      if (isGlob(raw)) {
+        // Root at the glob's static base so event relativePaths are meaningful.
+        return path.resolve(cwd, splitGlobBase(raw).base);
+      }
+      const abs = path.resolve(cwd, raw);
       try {
         return fs.statSync(abs).isDirectory() ? abs : path.dirname(abs);
       } catch {
@@ -590,26 +608,58 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
     return path.resolve(cwd);
   }
 
-  #resolveTargets(): PlatformWatchTarget[] {
-    return this.#toTargets(this.#targets);
-  }
+  /**
+   * Resolve a raw target string into the platform target to watch plus the
+   * scope globs it contributes. A glob target watches its static base directory
+   * recursively and contributes the (absolute) glob as a scope filter; a literal
+   * target watches the path itself and contributes `path` + `path/**` so its
+   * entries stay in scope if another target later activates scope filtering.
+   */
+  #resolveTarget(raw: string): {
+    platform: PlatformWatchTarget;
+    scopeGlobs: GlobMatcher[];
+    isGlob: boolean;
+  } {
+    const cwd = this.#options.cwd;
+    const ci = { caseInsensitive: caseInsensitiveFs };
 
-  #toTargets(paths: string[]): PlatformWatchTarget[] {
-    return paths.map((target) => {
-      const abs = path.resolve(this.#options.cwd, target);
-      let isDirectory = true;
-      try {
-        isDirectory = fs.statSync(abs).isDirectory();
-      } catch {
-        // Assume directory if it doesn't exist yet; watch may still fail loudly.
-      }
+    if (isGlob(raw)) {
+      const baseAbs = path.resolve(cwd, splitGlobBase(raw).base);
+      const patternPosix = toPosix(path.resolve(cwd, raw));
       return {
+        platform: {
+          absolutePath: baseAbs,
+          isDirectory: true,
+          recursive: this.#options.recursive,
+          followSymlinks: this.#options.followSymlinks,
+        },
+        scopeGlobs: [compileGlob(patternPosix, ci)],
+        isGlob: true,
+      };
+    }
+
+    const abs = path.resolve(cwd, raw);
+    let isDirectory = true;
+    try {
+      isDirectory = fs.statSync(abs).isDirectory();
+    } catch {
+      // Assume directory if it doesn't exist yet; watch may still fail loudly.
+    }
+    const posixAbs = toPosix(abs);
+    return {
+      platform: {
         absolutePath: abs,
         isDirectory,
         recursive: isDirectory && this.#options.recursive,
         followSymlinks: this.#options.followSymlinks,
-      };
-    });
+      },
+      scopeGlobs: [compileGlob(posixAbs, ci), compileGlob(`${posixAbs}/**`, ci)],
+      isGlob: false,
+    };
+  }
+
+  #toTargets(paths: string[]): PlatformWatchTarget[] {
+    return paths.map((raw) => this.#resolveTarget(raw).platform);
   }
 }
 

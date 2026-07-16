@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { writeFileSync, mkdirSync, utimesSync, statSync } from "node:fs";
+import { writeFileSync, mkdirSync, utimesSync, statSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { watch } from "../src/index.js";
 import type { WatchEvent } from "../src/index.js";
@@ -209,5 +209,71 @@ describe("close during startup", () => {
     expect(closeFired).toBe(true);
     expect(readyFired).toBe(false);
     expect(w.getWatched()).toEqual({}); // no handles/entries leaked
+  });
+});
+
+describe("glob watch targets", () => {
+  it("emits only files matching the glob, ignoring others", async () => {
+    const dir = makeDir();
+    mkdirSync(join(dir, "src"));
+    writeFileSync(join(dir, "src", "keep.ts"), "1");
+    writeFileSync(join(dir, "src", "skip.js"), "1");
+
+    const w = watch(join(dir, "src", "**", "*.ts"), { ignoreInitial: true });
+    cleanups.push(() => void w.close());
+    await w.ready();
+
+    const seen: string[] = [];
+    w.on("all", (e) => seen.push(e.relativePath));
+
+    writeFileSync(join(dir, "src", "added.ts"), "2");
+    writeFileSync(join(dir, "src", "added.js"), "2");
+    await waitFor(() => seen.some((p) => p.endsWith("added.ts")), 5000);
+    await sleep(150);
+    expect(seen.some((p) => p.endsWith("added.ts"))).toBe(true);
+    expect(seen.some((p) => p.endsWith(".js"))).toBe(false);
+  });
+
+  it("matches files created later in new subdirectories (live scope)", async () => {
+    const dir = makeDir();
+    const w = watch(join(dir, "**", "*.ts"), { ignoreInitial: true });
+    cleanups.push(() => void w.close());
+    await w.ready();
+
+    const seen: string[] = [];
+    w.on("all", (e) => seen.push(e.relativePath));
+
+    mkdirSync(join(dir, "nested"));
+    await sleep(150); // let a per-dir (Linux) watcher attach
+    writeFileSync(join(dir, "nested", "deep.ts"), "x");
+    await waitFor(() => seen.some((p) => p.endsWith("deep.ts")), 5000);
+    expect(seen.some((p) => p.endsWith("deep.ts"))).toBe(true);
+  });
+
+  it("still emits everything for a literal target mixed with a glob", async () => {
+    const dir = makeDir();
+    mkdirSync(join(dir, "lit"));
+    mkdirSync(join(dir, "globbed"));
+
+    const w = watch([join(dir, "lit"), join(dir, "globbed", "**", "*.ts")], {
+      ignoreInitial: true,
+    });
+    cleanups.push(() => void w.close());
+    await w.ready();
+
+    const seen: string[] = [];
+    w.on("all", (e) => seen.push(e.absolutePath));
+
+    writeFileSync(join(dir, "lit", "anything.json"), "1"); // literal → allowed
+    writeFileSync(join(dir, "globbed", "in.ts"), "1"); // glob match → allowed
+    writeFileSync(join(dir, "globbed", "out.md"), "1"); // glob miss → suppressed
+    await waitFor(
+      () => seen.some((p) => p.endsWith("anything.json")) && seen.some((p) => p.endsWith("in.ts")),
+      5000,
+    );
+    await sleep(150);
+    expect(seen.some((p) => p.endsWith("anything.json"))).toBe(true);
+    expect(seen.some((p) => p.endsWith("in.ts"))).toBe(true);
+    expect(seen.some((p) => p.endsWith("out.md"))).toBe(false);
   });
 });
