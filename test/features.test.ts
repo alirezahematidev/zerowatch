@@ -276,6 +276,33 @@ describe("glob watch targets", () => {
     expect(seen.some((p) => p.endsWith("in.ts"))).toBe(true);
     expect(seen.some((p) => p.endsWith("out.md"))).toBe(false);
   });
+
+  it("dedups same-base glob targets but keeps all their scope globs", async () => {
+    const dir = makeDir();
+    const w = watch([join(dir, "**", "*.ts"), join(dir, "**", "*.tsx")], {
+      ignoreInitial: true,
+    });
+    cleanups.push(() => void w.close());
+    await w.ready();
+
+    const seen: string[] = [];
+    w.on("all", (e) => seen.push(e.relativePath));
+
+    writeFileSync(join(dir, "a.ts"), "1");
+    writeFileSync(join(dir, "b.tsx"), "1");
+    writeFileSync(join(dir, "c.js"), "1");
+    await waitFor(
+      () => seen.some((p) => p.endsWith("a.ts")) && seen.some((p) => p.endsWith("b.tsx")),
+      5000,
+    );
+    await sleep(150);
+    // Both scope globs stay active despite the duplicate base being deduped —
+    // both extensions are still delivered, and the .js file is still filtered out.
+    expect(seen.some((p) => p.endsWith("a.ts"))).toBe(true);
+    expect(seen.some((p) => p.endsWith("b.tsx"))).toBe(true);
+    expect(seen.some((p) => p.endsWith(".js"))).toBe(false);
+    await w.close(); // must resolve cleanly (no double-registered handle to hang or throw on)
+  });
 });
 
 describe("event stats", () => {

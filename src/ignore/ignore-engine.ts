@@ -86,9 +86,18 @@ export class IgnoreEngine {
    * (a glob target) begins enforcement. Activation never reverts, and because
    * every target contributes its globs as it is added, activating later cannot
    * retroactively filter out already-watched literal targets.
+   *
+   * Skips any glob whose `.source` already exists in the scope — `add()` calls
+   * this before its already-watched guard (so a new glob sharing an
+   * already-watched base still registers its scope), which means re-`add()`ing
+   * the same glob would otherwise push an unbounded number of duplicate
+   * (harmless but wasteful) allow-list entries.
    */
   extendScope(globs: GlobMatcher[], active: boolean): void {
-    for (const glob of globs) this.#scope.push(glob);
+    for (const glob of globs) {
+      if (this.#scope.some((g) => g.source === glob.source)) continue;
+      this.#scope.push(glob);
+    }
     if (active) this.#scopeActive = true;
   }
 

@@ -243,6 +243,9 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
       // path the caller explicitly stopped watching.
       this.#cancelHoldsUnder(target.absolutePath);
       this.#forgetSubtree(target.absolutePath);
+      // The ignore engine's scope allow-list is intentionally NOT shrunk here:
+      // this target's platform handle is already closed, so no more raw events
+      // will arrive for it to test against — any now-stale scope globs are inert.
     }
   }
 
@@ -343,6 +346,15 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
         // A concurrent close() may land while we await; abort so we neither
         // spin up further handles nor resurrect a closed watcher.
         if (this.#isClosed()) return;
+        // Two targets can share the same resolved base (e.g. two globs rooted
+        // at the same directory, `["src/**/*.ts", "src/**/*.js"]`). Skip the
+        // duplicate: starting a second platform watcher on an already-watched
+        // path would overwrite the first in #watchers while both remained in
+        // #holder.watchers, so close() (which only closes #watchers.values())
+        // would leak the shadowed handle. Safe to skip — every resolved
+        // target's scope globs were already collected into scopeGlobs above,
+        // before this loop runs, so no scope is lost.
+        if (this.#watchers.has(target.absolutePath)) continue;
         await this.#startTarget(target);
       }
 
