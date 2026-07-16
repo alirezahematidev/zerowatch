@@ -38,10 +38,12 @@ Watch a directory. Recursive by default.
 
 ### Glob watch targets
 
-`watch()` and `watch.directory()` accept **glob** targets — a target string
-containing `*`, `?`, `[…]`, or `{…}`. The watcher watches the glob's static base
-directory recursively and emits events only for **files** whose path matches the
-glob:
+`watch()`, `watch.directory()`, and `createWatcher()` all accept **glob**
+targets — they share the same underlying `Watcher` and target-resolution logic,
+so this applies uniformly regardless of entry point. A glob target is a target
+string containing `*`, `?`, `[…]`, or `{…}`. The watcher watches the glob's
+static base directory recursively and emits events only for **files** whose
+path matches the glob:
 
 ```ts
 watch("src/**/*.ts");                 // only .ts under src, at any depth
@@ -139,7 +141,7 @@ interface WatchEvent {
   timestamp: number;
   oldPath?: string;      // move only: previous absolute path
   isDirectory?: boolean; // best-effort
-  stats?: Stats;         // fs.Stats; create/change only (incl. initial scan;
+  stats?: fs.Stats;      // create/change only (incl. initial scan;
                          // settled under awaitWrite); absent on delete/move
 }
 ```
