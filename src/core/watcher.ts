@@ -445,14 +445,14 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
       this.#ignore,
       (error) => this.#reportError(error),
     );
-    for (const [abs, entry] of entries) {
+    for (const [abs, { entry, stats }] of entries) {
       // Only genuinely new entries get seeded — and only they emit an initial
       // create. Re-seeding an overlapping subtree (e.g. add() of a path already
       // covered by a recursive watch) must not re-announce known entries.
       if (this.#snapshot.has(abs)) continue;
       this.#snapshot.set(abs, entry);
       if (!this.#options.ignoreInitial) {
-        const event = this.#factory.create("create", abs, entry.isDirectory);
+        const event = this.#factory.create("create", abs, entry.isDirectory, stats);
         this.#dispatch(event);
       }
     }
@@ -568,10 +568,10 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
     // we neither mutate a closed watcher's snapshot nor deliver events (and
     // schedule move/debounce timers) after the terminal `close` event.
     if (this.#isClosed()) return;
-    for (const [abs, entry] of entries) {
+    for (const [abs, { entry, stats }] of entries) {
       if (this.#snapshot.has(abs)) continue;
       this.#snapshot.set(abs, entry);
-      const event = this.#factory.create("create", abs, entry.isDirectory);
+      const event = this.#factory.create("create", abs, entry.isDirectory, stats);
       this.#moveDetector.feed(event, entry.ino, entry.dev);
     }
   }

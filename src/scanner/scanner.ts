@@ -29,6 +29,16 @@ export interface ScanOptions {
   readonly maxDepth?: number;
 }
 
+/**
+ * A scanned entry plus its raw `Stats`. The `stats` is transient — used to
+ * populate initial `create` events during seeding and then discarded, so the
+ * long-lived snapshot keeps storing only the lightweight `FsEntry`.
+ */
+export interface ScannedEntry {
+  readonly entry: FsEntry;
+  readonly stats: Stats;
+}
+
 /** Build an {@link FsEntry} from a stat result. */
 export function toEntry(absolutePath: string, stats: Stats): FsEntry {
   return {
@@ -63,13 +73,13 @@ export async function scan(
   options: ScanOptions,
   ignore: IgnoreEngine,
   onError: (error: Error) => void,
-): Promise<Map<string, FsEntry>> {
-  const entries = new Map<string, FsEntry>();
+): Promise<Map<string, ScannedEntry>> {
+  const entries = new Map<string, ScannedEntry>();
   const rootStats = await safeStat(root, onError);
   if (!rootStats) return entries;
 
   if (!rootStats.isDirectory()) {
-    entries.set(root, toEntry(root, rootStats));
+    entries.set(root, { entry: toEntry(root, rootStats), stats: rootStats });
     return entries;
   }
 
@@ -108,7 +118,7 @@ export async function scan(
 
       if (stats.isDirectory()) {
         if (ignore.ignoresDirectory(abs)) continue;
-        entries.set(abs, toEntry(abs, stats));
+        entries.set(abs, { entry: toEntry(abs, stats), stats });
         // Descend only while the children we'd find stay within maxDepth.
         if (options.recursive && depth < maxDepth) {
           if (await visitDir(visitedInodes, abs, stats, options.followSymlinks, onError)) {
@@ -118,7 +128,7 @@ export async function scan(
         }
       } else if (stats.isFile()) {
         if (ignore.ignoresFile(abs)) continue;
-        entries.set(abs, toEntry(abs, stats));
+        entries.set(abs, { entry: toEntry(abs, stats), stats });
       }
     }
   }

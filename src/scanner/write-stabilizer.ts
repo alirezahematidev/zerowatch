@@ -138,7 +138,9 @@ export class WriteStabilizer {
         entry.ticks += 1;
         if (entry.ticks >= this.#requiredStableTicks) {
           this.#pending.delete(absolutePath);
-          entry.emit(entry.event);
+          // Emit with the freshly polled stats so size/mtime reflect the settled
+          // file, not the partial state observed when the event was classified.
+          entry.emit({ ...entry.event, stats });
           return;
         }
       } else {

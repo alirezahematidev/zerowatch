@@ -301,3 +301,42 @@ describe("event stats", () => {
     expect(byType.get("delete")?.stats).toBeUndefined();
   });
 });
+
+describe("initial-scan stats", () => {
+  it("initial create events carry stats", async () => {
+    const dir = makeDir();
+    writeFileSync(join(dir, "seed.txt"), "hello"); // 5 bytes
+    const w = watch(dir); // ignoreInitial defaults to false
+    cleanups.push(() => void w.close());
+
+    let seed: WatchEvent | undefined;
+    w.on("create", (e) => {
+      if (e.relativePath === "seed.txt") seed = e;
+    });
+    await w.ready();
+    await waitFor(() => seed !== undefined, 5000);
+    expect(seed?.stats?.size).toBe(5);
+  });
+});
+
+describe("awaitWrite stats", () => {
+  it("reports the settled size, not the partial size", async () => {
+    const dir = makeDir();
+    const w = watch(dir, {
+      ignoreInitial: true,
+      awaitWrite: { stabilityThreshold: 100, pollInterval: 25 },
+    });
+    cleanups.push(() => void w.close());
+    await w.ready();
+
+    const creates: WatchEvent[] = [];
+    w.on("create", (e) => creates.push(e));
+
+    const file = join(dir, "big.bin");
+    writeFileSync(file, "aaaa"); // 4 bytes seen first
+    await sleep(30);
+    writeFileSync(file, "aaaaaaaaaa"); // grows to 10 before settling
+    await waitFor(() => creates.length > 0, 5000);
+    expect(creates[0]!.stats?.size).toBe(10);
+  });
+});
