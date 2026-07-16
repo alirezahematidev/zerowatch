@@ -4,8 +4,21 @@
   "description": "A modern, zero-dependency file watcher for Node.js",
   "type": "module",
   "license": "MIT",
+  "author": "Alireza Hemmati <alirezahematideveloper71@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alirezahematidev/zerowatch.git"
+  },
+  "bugs": {
+    "url": "https://github.com/alirezahematidev/zerowatch/issues"
+  },
+  "homepage": "https://github.com/alirezahematidev/zerowatch#readme",
   "engines": {
     "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "sideEffects": false,
   "exports": {

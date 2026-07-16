@@ -13,7 +13,7 @@
     "autoGenerate": false
   },
   "npm": {
-    "publish": true
+    "publish": false
   },
   "hooks": {
     "before:init": ["yarn typecheck", "yarn test"],

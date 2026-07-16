@@ -1,0 +1,61 @@
+name: Release
+
+# Publishing is tag-triggered: `release-it` cuts the release locally (version
+# bump, CHANGELOG, commit, annotated vX.Y.Z tag, GitHub release). Pushing the
+# tag fires this workflow, which rebuilds from scratch, re-runs the full test
+# suite, and publishes to npm with provenance. npm auth never lives on a laptop.
+on:
+  push:
+    tags:
+      - "v*"
+
+# Least privilege: read the repo, and mint an OIDC token so `npm publish` can
+# attach a signed provenance statement (publishConfig.provenance = true).
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: publish to npm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+          registry-url: https://registry.npmjs.org
+
+      - run: yarn install --frozen-lockfile
+
+      - name: Typecheck
+        run: yarn typecheck
+
+      - name: Test
+        run: yarn test
+
+      - name: Build
+        run: yarn build
+
+      - name: Check published types (are-the-types-wrong)
+        run: yarn attw
+
+      # Fail fast if someone pushed a tag whose name doesn't match the version
+      # in package.json — that mismatch otherwise publishes the wrong version.
+      - name: Verify tag matches package.json version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Tag v$TAG does not match package.json version $PKG"
+            exit 1
+          fi
+          echo "Tag and package.json agree on version $PKG"
+
+      - name: Publish
+        # provenance + public access come from package.json publishConfig.
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

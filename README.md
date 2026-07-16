@@ -1,5 +1,10 @@
 # zerowatch
 
+[![CI](https://github.com/alirezahematidev/zerowatch/actions/workflows/ci.yml/badge.svg)](https://github.com/alirezahematidev/zerowatch/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/zerowatch.svg)](https://www.npmjs.com/package/zerowatch)
+[![node](https://img.shields.io/node/v/zerowatch.svg)](https://www.npmjs.com/package/zerowatch)
+[![license](https://img.shields.io/npm/l/zerowatch.svg)](./LICENSE)
+
 > A modern, dual **ESM/CommonJS**, zero-dependency file watcher for Node.js — a spiritual successor to [chokidar](https://github.com/paulmillr/chokidar).
 
 `zerowatch` gives you filesystem watching with the ergonomics you'd design today: **async iterators** as the primary API, **promises** for lifecycle, **typed events**, and a **normalized four-event model** (`create` / `change` / `delete` / `move`) across Linux, macOS and Windows.
