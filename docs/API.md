@@ -36,6 +36,26 @@ Watch a single file. Recursion is forced off. Emits `change`/`delete` (and `crea
 
 Watch a directory. Recursive by default.
 
+### Glob watch targets
+
+`watch()` and `watch.directory()` accept **glob** targets — a target string
+containing `*`, `?`, `[…]`, or `{…}`. The watcher watches the glob's static base
+directory recursively and emits events only for **files** whose path matches the
+glob:
+
+```ts
+watch("src/**/*.ts");                 // only .ts under src, at any depth
+watch(["assets/**/*.png", "src/**/*.{ts,tsx}"]);
+```
+
+Directory events still fire and the tree is still traversed in full (needed to
+find deep matches) — consistent with the `extensions` allow-list. `ignore`,
+`gitignore`, `extensions`, and `depth` all still apply on top. `watch.file()`
+always forces non-recursive watching and resolves its argument through the same
+target logic as `watch()` — pass it a literal path; a string containing glob
+metacharacters is still glob-matched (scoped non-recursively to its base
+directory) rather than treated as a literal filename.
+
 ---
 
 ## `createWatcher(options)`
@@ -119,6 +139,8 @@ interface WatchEvent {
   timestamp: number;
   oldPath?: string;      // move only: previous absolute path
   isDirectory?: boolean; // best-effort
+  stats?: Stats;         // fs.Stats; create/change only (incl. initial scan;
+                         // settled under awaitWrite); absent on delete/move
 }
 ```
 
@@ -171,6 +193,24 @@ Fully typed. Events:
 ### `watcher.pause()` / `watcher.resume()`
 
 `pause()` stops delivery; events that occur while paused are **buffered**. `resume()` flushes them in order. `watcher.paused` reflects the current state.
+
+### `watcher.add(paths): Promise<void>`
+
+Begin watching one or more additional paths (including globs) on a live watcher.
+Resolves once attached and pre-existing entries are seeded (initial `create`s
+emitted unless `ignoreInitial` is set). No-op for already-watched paths or after
+`close()`.
+
+### `watcher.unwatch(paths): Promise<void>`
+
+Stop watching one or more paths, releasing their handles and forgetting their
+tracked entries. No `delete` events are emitted for the forgotten subtree.
+
+### `watcher.getWatched(): Record<string, string[]>`
+
+The currently tracked entries, grouped by parent directory (relative to the
+watched root, `"."` for the root's own children) mapping to sorted child
+basenames — the same shape chokidar returns.
 
 ### `watcher[Symbol.asyncIterator]()`
 

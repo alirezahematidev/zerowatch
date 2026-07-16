@@ -10,6 +10,7 @@
 - 🧭 Async-iterator first, with typed events and promise-based lifecycle.
 - 📦 Zero runtime dependencies, ~25 KB minified, dual ESM + CommonJS.
 - 🧰 Glob ignoring, debounce, batching, write-stability, polling.
+- 🎯 Glob watch targets (`watch("src/**/*.ts")`) and `fs.Stats` on create/change events.
 
 ## Install
 

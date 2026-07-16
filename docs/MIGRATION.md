@@ -87,9 +87,9 @@ for await (const event of watch("src")) {
 | `ignoreInitial` | `ignoreInitial` |
 | `followSymlinks` | `followSymlinks` |
 | `cwd` | `cwd` |
-| `depth` | *(use `recursive: false` for depth 0; arbitrary depth capping is not exposed)* |
+| `depth` | `depth` (max recursion depth; `recursive: false` = depth 0) |
 | `awaitWriteFinish` | `awaitWrite` (`{ stabilityThreshold, pollInterval }`) |
-| `usePolling` / `interval` | *(not needed; native watching + per-dir fallback)* |
+| `usePolling` / `interval` | `usePolling` / `interval` (opt-in polling backend) |
 | *(n/a)* | `debounce` |
 | *(n/a)* | `batch` |
 | *(n/a)* | `gitignore` |
@@ -141,7 +141,17 @@ await watcher.close();
 
 ## Things that are intentionally different
 
-- **No `getWatched()`** — inspect via your own `all` listener state.
-- **No polling mode** — `zerowatch` relies on native `fs.watch`; Linux uses one handle per directory.
-- **Paths are objects, not strings** — every callback receives a `WatchEvent`.
+- **Paths are objects, not strings** — every callback receives a `WatchEvent`
+  (with `absolutePath`, `relativePath`, `isDirectory`, and `stats` on
+  `create`/`change`).
 - **Batching & debouncing are first-class** — no need for userland wrappers.
+- **`move` is a first-class event** — a rename is one `move` (with `oldPath`),
+  not an `unlink` + `add` pair.
+
+## chokidar features with direct equivalents
+
+- **`getWatched()`** — supported, same `{ dir: string[] }` shape.
+- **`add()` / `unwatch()`** — supported.
+- **Glob paths** — supported as watch targets (`watch("src/**/*.ts")`).
+- **Polling** — supported via `usePolling` / `interval`.
+- **`depth`** — supported.
