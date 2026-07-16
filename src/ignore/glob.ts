@@ -212,3 +212,31 @@ function compileBraces(
   const source = alternatives.map((alt) => globToRegExpSource(alt)).join("|");
   return { source: `(?:${source})`, endIndex: end };
 }
+
+/** Glob metacharacters that distinguish a pattern from a literal path. */
+const GLOB_METACHARS = /[*?[\]{}]/;
+
+/** True when `input` contains any glob metacharacter (`* ? [ ] { }`). */
+export function isGlob(input: string): boolean {
+  return GLOB_METACHARS.test(input);
+}
+
+/**
+ * Split a glob pattern into its static base directory — the leading run of
+ * segments containing no glob metacharacter — and the original pattern.
+ * Separators (`/` or `\`) are both recognized; the returned `base` is POSIX
+ * (`/`-joined) and safe to pass to `path.resolve`.
+ *
+ *   "src/**\/*.ts"     -> { base: "src",        pattern: "src/**\/*.ts" }
+ *   "assets/img/*.png" -> { base: "assets/img", pattern: "assets/img/*.png" }
+ *   "**\/*.ts"         -> { base: "",           pattern: "**\/*.ts" }
+ */
+export function splitGlobBase(pattern: string): { base: string; pattern: string } {
+  const segments = pattern.split(/[\\/]/);
+  const baseSegments: string[] = [];
+  for (const segment of segments) {
+    if (isGlob(segment)) break;
+    baseSegments.push(segment);
+  }
+  return { base: baseSegments.join("/"), pattern };
+}
