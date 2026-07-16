@@ -100,7 +100,7 @@ export class EventClassifier {
 
     if (!prev) {
       this.#snapshot.set(absolutePath, this.#entryFor(absolutePath, stats, isFile));
-      const event = this.#factory.create("create", absolutePath, isDirectory);
+      const event = this.#factory.create("create", absolutePath, isDirectory, stats);
       return { event, ino: Number(stats.ino), dev: Number(stats.dev) };
     }
 
@@ -113,7 +113,7 @@ export class EventClassifier {
       const cascade = prev.isDirectory ? this.#removeDescendants(absolutePath) : [];
       const deleteEvent = this.#factory.create("delete", absolutePath, prev.isDirectory);
       this.#snapshot.set(absolutePath, this.#entryFor(absolutePath, stats, isFile));
-      const createEvent = this.#factory.create("create", absolutePath, isDirectory);
+      const createEvent = this.#factory.create("create", absolutePath, isDirectory, stats);
       return {
         event: deleteEvent,
         ino: prev.ino,
@@ -145,11 +145,11 @@ export class EventClassifier {
       }
       if (hash === undefined || hash === prev.hash) return null;
       this.#snapshot.set(absolutePath, { ...toEntry(absolutePath, stats), hash });
-      return { event: this.#factory.create("change", absolutePath, false), ino: Number(stats.ino), dev: Number(stats.dev) };
+      return { event: this.#factory.create("change", absolutePath, false, stats), ino: Number(stats.ino), dev: Number(stats.dev) };
     }
 
     this.#snapshot.set(absolutePath, this.#entryFor(absolutePath, stats, true));
-    const event = this.#factory.create("change", absolutePath, false);
+    const event = this.#factory.create("change", absolutePath, false, stats);
     return { event, ino: Number(stats.ino), dev: Number(stats.dev) };
   }
 

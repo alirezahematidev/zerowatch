@@ -1,9 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
+import { statSync } from "node:fs";
 import { TypedEmitter } from "../src/events/emitter.js";
 import { AsyncQueue } from "../src/core/async-queue.js";
 import { Debouncer } from "../src/debounce/debouncer.js";
 import { Batcher } from "../src/batch/batcher.js";
 import { MoveDetector } from "../src/events/move-detector.js";
+import { EventFactory } from "../src/events/factory.js";
 import type { WatchEvent } from "../src/index.js";
 
 function event(type: WatchEvent["type"], name: string, ts = 0): WatchEvent {
@@ -218,5 +220,14 @@ describe("Batcher", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("EventFactory stats", () => {
+  it("attaches stats when provided and omits them otherwise", () => {
+    const f = new EventFactory("/root", () => 123);
+    const s = statSync("package.json");
+    expect(f.create("create", "/root/a.ts", false, s).stats).toBe(s);
+    expect(f.create("delete", "/root/a.ts", false).stats).toBeUndefined();
   });
 });

@@ -277,3 +277,27 @@ describe("glob watch targets", () => {
     expect(seen.some((p) => p.endsWith("out.md"))).toBe(false);
   });
 });
+
+describe("event stats", () => {
+  it("carries stats on create and change, but not delete", async () => {
+    const dir = makeDir();
+    const w = watch(dir, { ignoreInitial: true });
+    cleanups.push(() => void w.close());
+    await w.ready();
+
+    const byType = new Map<string, WatchEvent>();
+    w.on("all", (e) => byType.set(e.type, e));
+
+    const file = join(dir, "f.txt");
+    writeFileSync(file, "hello");
+    await waitFor(() => byType.has("create"), 5000);
+    writeFileSync(file, "hello world");
+    await waitFor(() => byType.has("change"), 5000);
+    rmSync(file);
+    await waitFor(() => byType.has("delete"), 5000);
+
+    expect(byType.get("create")?.stats?.isFile()).toBe(true);
+    expect(typeof byType.get("change")?.stats?.size).toBe("number");
+    expect(byType.get("delete")?.stats).toBeUndefined();
+  });
+});

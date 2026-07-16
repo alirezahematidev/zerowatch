@@ -1,3 +1,5 @@
+import type { Stats } from "node:fs";
+
 /**
  * The normalized set of filesystem event types emitted by zerowatch.
  *
@@ -52,6 +54,12 @@ export interface WatchEvent {
    * entry no longer exists, e.g. on `delete`).
    */
   readonly isDirectory?: boolean;
+  /**
+   * The live `fs.Stats` for the entry when the event was produced. Present on
+   * `create` and `change` only; absent on `delete` and `move` (no live file to
+   * stat). Under `awaitWrite`, this reflects the file once its size has settled.
+   */
+  readonly stats?: Stats;
 }
 
 /**

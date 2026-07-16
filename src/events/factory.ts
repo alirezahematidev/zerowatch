@@ -1,3 +1,4 @@
+import type { Stats } from "node:fs";
 import type { WatchEvent, WatchEventType } from "../types/events.js";
 import { relativeTo } from "../utils/paths.js";
 
@@ -19,6 +20,7 @@ export class EventFactory {
     type: WatchEventType,
     absolutePath: string,
     isDirectory: boolean | undefined,
+    stats?: Stats,
   ): WatchEvent {
     const relativePath = relativeTo(this.#root, absolutePath);
     return {
@@ -28,6 +30,7 @@ export class EventFactory {
       relativePath,
       timestamp: this.#now(),
       ...(isDirectory !== undefined ? { isDirectory } : {}),
+      ...(stats !== undefined ? { stats } : {}),
     };
   }
 }
