@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.2.0](https://github.com/alirezahematidev/zerowatch/compare/v0.1.2...v0.2.0) (2026-07-16)
+
+### Features
+
+* attach fs.Stats to create and change events ([10f8276](https://github.com/alirezahematidev/zerowatch/commit/10f8276f81f8a494bda5ca9868a30aa6d8c290b9))
+* concurrency ([ab350a7](https://github.com/alirezahematidev/zerowatch/commit/ab350a7e8361565d49013b1edc926c64169ed790))
+* **glob:** add isGlob and splitGlobBase helpers ([35f227c](https://github.com/alirezahematidev/zerowatch/commit/35f227ce6d4f6da6df48ae1866358482334da04d))
+* **ignore:** scope allow-list for glob watch targets ([af9cf42](https://github.com/alirezahematidev/zerowatch/commit/af9cf4204e50521063b5fa81d0e8a3071d17f022))
+* stats on initial-scan creates and settled awaitWrite events ([9e466e0](https://github.com/alirezahematidev/zerowatch/commit/9e466e00504d8cc2c9601748c2e80caf3b604a55))
+* support glob watch targets (watch("src/**/*.ts")) ([fa80b47](https://github.com/alirezahematidev/zerowatch/commit/fa80b470fd6f5ce200839a3a78cfdbfa74e07020))
+
+### Bug Fixes
+
+* dedup same-base watch targets and scope globs ([8de075a](https://github.com/alirezahematidev/zerowatch/commit/8de075a12b2af6c75606b1e1f0c5d7e5b3ebcb49))
+* treat watch.file() path literally, not as a glob ([7b6f39f](https://github.com/alirezahematidev/zerowatch/commit/7b6f39f2633e02d165fde11e5c39450dc6238cf0))
+
+### Documentation
+
+* cover createWatcher() in glob-targets section, tidy stats type ([45f7a73](https://github.com/alirezahematidev/zerowatch/commit/45f7a73a9513cb9fde6a1b64ca691848b4732417))
+* design spec for chokidar-parity pass (glob targets, event stats, docs) ([eb22775](https://github.com/alirezahematidev/zerowatch/commit/eb22775fbbf26763d1b3711d8186f18dbc8cd302))
+* document glob targets, event stats, add/unwatch/getWatched; fix stale migration claims ([33dd6cd](https://github.com/alirezahematidev/zerowatch/commit/33dd6cdbbe928962b179d6e86ce8d8bed764eed9))
+* implementation plan for chokidar-parity pass ([e43bf31](https://github.com/alirezahematidev/zerowatch/commit/e43bf317b0c14e90424a452b0694305c19727bf3))
+
 ## [0.1.2](https://github.com/alirezahematidev/zerowatch/compare/v0.1.1...v0.1.2) (2026-07-16)
 
 ## [0.1.1](https://github.com/alirezahematidev/zerowatch/compare/v0.1.0...v0.1.1) (2026-07-16)
