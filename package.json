@@ -70,15 +70,18 @@
   ],
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
+    "@parcel/watcher": "^2.5.6",
     "@release-it/conventional-changelog": "^11.0.1",
     "@types/node": "^22.10.0",
     "@vitest/coverage-v8": "4.1.10",
     "chokidar": "^5.0.0",
     "release-it": "^20.2.1",
+    "sane": "^5.0.1",
     "tinybench": "^6.0.2",
     "tsup": "^8.5.1",
     "typescript": "^5.7.0",
     "vite": "^8.1.4",
-    "vitest": "4.1.10"
+    "vitest": "4.1.10",
+    "watchpack": "^2.5.2"
   }
 }
