@@ -30,7 +30,7 @@ function watch(path: string | string[], options: WatchOptions & { batch: number 
 
 ### `watch.file(path, options?)`
 
-Watch a single file. Recursion is forced off. Emits `change`/`delete` (and `create` if the file is (re)created).
+Watch a single file. Recursion is forced off. Emits `change`/`delete` (and `create` if the file is (re)created). The path is treated as a **literal filename** — never glob-interpreted, even if it contains glob metacharacters (e.g. `watch.file("app/routes/[id].tsx")` watches that exact file rather than parsing `[id]` as a character class).
 
 ### `watch.directory(path, options?)`
 
@@ -53,10 +53,10 @@ watch(["assets/**/*.png", "src/**/*.{ts,tsx}"]);
 Directory events still fire and the tree is still traversed in full (needed to
 find deep matches) — consistent with the `extensions` allow-list. `ignore`,
 `gitignore`, `extensions`, and `depth` all still apply on top. `watch.file()`
-always forces non-recursive watching and resolves its argument through the same
-target logic as `watch()` — pass it a literal path; a string containing glob
-metacharacters is still glob-matched (scoped non-recursively to its base
-directory) rather than treated as a literal filename.
+is **not** one of these glob-accepting entry points: it always forces
+non-recursive watching and treats its argument as a **literal path** — a
+filename containing glob metacharacters (e.g. `[id].tsx`) is watched as-is,
+never interpreted as a glob.
 
 ---
 

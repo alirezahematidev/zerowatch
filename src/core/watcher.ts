@@ -67,6 +67,9 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
   readonly #options: ResolvedOptions;
   readonly #root: string;
   readonly #now: () => number;
+  /** watch.file() sets this so a filename containing glob metacharacters is
+   *  taken literally instead of being interpreted as a glob target. */
+  readonly #literalTargets: boolean;
 
   readonly #emitter = new WatcherInternalEmitter();
   readonly #queue: AsyncQueue<EmittedUnit>;
@@ -100,12 +103,18 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
   #resolveReady!: () => void;
   #rejectReady!: (error: unknown) => void;
 
-  constructor(paths: string | string[], options: WatchOptions = {}, now: () => number = Date.now) {
+  constructor(
+    paths: string | string[],
+    options: WatchOptions = {},
+    now: () => number = Date.now,
+    literalTargets = false,
+  ) {
     this.#targets = Array.isArray(paths) ? [...paths] : [paths];
     if (this.#targets.length === 0) {
       throw new TypeError("zerowatch: at least one path is required");
     }
     this.#now = now;
+    this.#literalTargets = literalTargets;
     const cwd = options.cwd ?? process.cwd();
     this.#options = resolveOptions(options, cwd);
     this.#root = this.#computeRoot();
@@ -606,7 +615,7 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
     const cwd = this.#options.cwd;
     if (this.#targets.length === 1) {
       const raw = this.#targets[0]!;
-      if (isGlob(raw)) {
+      if (!this.#literalTargets && isGlob(raw)) {
         // Root at the glob's static base so event relativePaths are meaningful.
         return path.resolve(cwd, splitGlobBase(raw).base);
       }
@@ -635,7 +644,7 @@ export class Watcher<T extends EmittedUnit = WatchEvent>
     const cwd = this.#options.cwd;
     const ci = { caseInsensitive: caseInsensitiveFs };
 
-    if (isGlob(raw)) {
+    if (!this.#literalTargets && isGlob(raw)) {
       const baseAbs = path.resolve(cwd, splitGlobBase(raw).base);
       const patternPosix = toPosix(path.resolve(cwd, raw));
       return {

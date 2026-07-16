@@ -44,16 +44,18 @@ export interface WatchFunction {
 function makeWatcher(
   paths: string | string[],
   options: WatchOptions,
+  literalTargets = false,
 ): Watcher<EmittedUnit> {
-  return new Watcher(paths, options) as Watcher<EmittedUnit>;
+  return new Watcher(paths, options, Date.now, literalTargets) as Watcher<EmittedUnit>;
 }
 
 const watchImpl = ((paths: string | string[], options: WatchOptions = {}) =>
   makeWatcher(paths, options)) as WatchFunction;
 
 watchImpl.file = ((filePath: string, options: WatchOptions = {}) =>
-  // A single file is never recursive.
-  makeWatcher(filePath, { ...options, recursive: false })) as WatchFunction["file"];
+  // A single file is never recursive, and its path is taken literally: a
+  // filename may legitimately contain glob metacharacters (e.g. `[id].tsx`).
+  makeWatcher(filePath, { ...options, recursive: false }, true)) as WatchFunction["file"];
 
 watchImpl.directory = ((dirPath: string, options: WatchOptions = {}) =>
   makeWatcher(dirPath, { recursive: true, ...options })) as WatchFunction["directory"];

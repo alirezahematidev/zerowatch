@@ -305,6 +305,22 @@ describe("glob watch targets", () => {
   });
 });
 
+describe("watch.file() literal paths", () => {
+  it("treats a filename containing glob metacharacters literally", async () => {
+    const dir = makeDir();
+    const file = join(dir, "a[1].txt"); // '[' is a glob char class if misinterpreted
+    writeFileSync(file, "v1");
+    const w = watch.file(file, { ignoreInitial: true });
+    cleanups.push(() => void w.close());
+    await w.ready();
+    const seen: string[] = [];
+    w.on("all", (e) => seen.push(e.relativePath));
+    writeFileSync(file, "v2");
+    await waitFor(() => seen.some((p) => p.endsWith("a[1].txt")), 5000);
+    expect(seen.some((p) => p.endsWith("a[1].txt"))).toBe(true);
+  });
+});
+
 describe("event stats", () => {
   it("carries stats on create and change, but not delete", async () => {
     const dir = makeDir();
