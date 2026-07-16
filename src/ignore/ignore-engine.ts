@@ -28,6 +28,10 @@ export class IgnoreEngine {
   readonly #gitignore: GitignoreSet | null;
   readonly #extensions: Set<string> | null;
   readonly #ignoreHidden: boolean;
+  /** Positive allow-list of absolute-path globs for glob watch targets. */
+  #scope: GlobMatcher[];
+  /** Whether the scope allow-list is enforced (true once any target is a glob). */
+  #scopeActive: boolean;
   /** Memoizes whether a directory (by absolute path) lies under an ignored ancestor. */
   readonly #ancestorCache = new Map<string, boolean>();
 
@@ -38,6 +42,8 @@ export class IgnoreEngine {
     gitignore: GitignoreSet | null,
     extensions: Set<string> | null,
     ignoreHidden: boolean,
+    scope: GlobMatcher[],
+    scopeActive: boolean,
   ) {
     this.#root = root;
     this.#globs = globs;
@@ -45,17 +51,45 @@ export class IgnoreEngine {
     this.#gitignore = gitignore;
     this.#extensions = extensions;
     this.#ignoreHidden = ignoreHidden;
+    this.#scope = scope;
+    this.#scopeActive = scopeActive;
   }
 
   /** Build an engine from resolved options and the absolute watched root. */
-  static create(root: string, options: WatchOptions): IgnoreEngine {
+  static create(
+    root: string,
+    options: WatchOptions,
+    scope: GlobMatcher[] = [],
+    scopeActive = false,
+  ): IgnoreEngine {
     const { globs, predicates } = splitIgnoreInput(options.ignore);
     const gitignore = options.gitignore ? loadRootGitignore(root, caseInsensitiveFs) : null;
     const extensions =
       options.extensions && options.extensions.length > 0
         ? new Set(options.extensions.map(normalizeExtension))
         : null;
-    return new IgnoreEngine(root, globs, predicates, gitignore, extensions, options.ignoreHidden ?? false);
+    return new IgnoreEngine(
+      root,
+      globs,
+      predicates,
+      gitignore,
+      extensions,
+      options.ignoreHidden ?? false,
+      scope,
+      scopeActive,
+    );
+  }
+
+  /**
+   * Grow the scope allow-list at runtime (used by `Watcher.add`). Pushing a
+   * literal target's globs while inactive is harmless; passing `active: true`
+   * (a glob target) begins enforcement. Activation never reverts, and because
+   * every target contributes its globs as it is added, activating later cannot
+   * retroactively filter out already-watched literal targets.
+   */
+  extendScope(globs: GlobMatcher[], active: boolean): void {
+    for (const glob of globs) this.#scope.push(glob);
+    if (active) this.#scopeActive = true;
   }
 
   /**
@@ -66,6 +100,21 @@ export class IgnoreEngine {
   #isHidden(relPosix: string): boolean {
     if (!this.#ignoreHidden) return false;
     return relPosix.split("/").some((seg) => seg.length > 0 && seg[0] === ".");
+  }
+
+  /**
+   * True when scope is active and this file matches none of the scope globs.
+   * Scope globs are compiled against the absolute POSIX path, so this is
+   * independent of `#root`. Inactive scope allows everything, so a watcher with
+   * only literal targets does no extra glob-testing here.
+   */
+  #outOfScope(absolutePath: string): boolean {
+    if (!this.#scopeActive) return false;
+    const posixAbs = toPosix(absolutePath);
+    for (const glob of this.#scope) {
+      if (glob.test(posixAbs)) return false;
+    }
+    return true;
   }
 
   /** Merge a nested `.gitignore` (discovered while scanning) into the engine. */
@@ -96,6 +145,7 @@ export class IgnoreEngine {
   ignoresFile(absolutePath: string): boolean {
     const rel = relativeTo(this.#root, absolutePath);
     if (this.#isHidden(rel)) return true;
+    if (this.#outOfScope(absolutePath)) return true;
     if (this.#matchesIgnoreRules(absolutePath, rel, false)) return true;
     if (this.#extensions && !this.#extensions.has(extname(absolutePath))) return true;
     return this.#ancestorIgnored(absolutePath);
