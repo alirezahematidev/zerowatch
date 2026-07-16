@@ -1,5 +1,7 @@
 # Changelog
 
+## [0.1.1](https://github.com/alirezahematidev/zerowatch/compare/v0.1.0...v0.1.1) (2026-07-16)
+
 ## 0.1.0 (2026-07-16)
 
 ### Features
