@@ -47,13 +47,13 @@ Cold startup over a 5,000-file tree on macOS (run `yarn bench`):
 
 | Watcher       | Startup    | Throughput       |
 | ------------- | ---------- | ---------------- |
-| **zerowatch** | **~58 ms** | ~8,800 events/s  |
-| chokidar      | ~175 ms    | ~18,500 events/s |
-| sane          | ~30 ms     | ~4,600 events/s  |
+| **zerowatch** | **~27 ms** | ~8,700 events/s  |
+| sane          | ~31 ms     | ~4,600 events/s  |
+| chokidar      | ~175 ms    | ~18,000 events/s |
 
-zerowatch reaches `ready` ~3× faster than chokidar with zero dependencies;
-chokidar leads on sustained throughput (a deliberate ordering-correctness
-tradeoff).
+zerowatch has the fastest cold start of any scan-doing watcher — ~6× faster than
+chokidar — with zero dependencies; chokidar leads on sustained throughput (a
+deliberate ordering-correctness tradeoff).
 
 ## Documentation
 

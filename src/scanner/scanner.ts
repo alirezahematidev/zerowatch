@@ -43,6 +43,14 @@ export function toEntry(absolutePath: string, stats: Stats): FsEntry {
 }
 
 /**
+ * Max `stat` calls in flight per directory. The libuv threadpool (default 4,
+ * raise with `UV_THREADPOOL_SIZE`) is the real ceiling on concurrent fs syscalls;
+ * this just keeps the pipeline full without letting a huge directory queue an
+ * unbounded burst of pending requests.
+ */
+const SCAN_CONCURRENCY = 64;
+
+/**
  * Walk `root` and return a snapshot of every non-ignored entry, keyed by
  * absolute path. Directories are visited before their children so nested
  * `.gitignore` files are loaded in time to filter siblings.
@@ -84,10 +92,19 @@ export async function scan(
     const dirents = await safeReadDir(dir, onError);
     if (!dirents) continue;
 
-    for (const dirent of dirents) {
-      const abs = path.join(dir, dirent.name);
-      const stats = await resolveStats(abs, dirent, options.followSymlinks, onError);
+    // Stat every entry concurrently (bounded), then apply the results in
+    // dirent order. Stats are the scan's dominant cost and are independent, so
+    // we let the libuv threadpool run them in parallel — but the ordering of
+    // `entries`, gitignore, and cycle detection stays identical to a serial walk.
+    const abses = dirents.map((dirent) => path.join(dir, dirent.name));
+    const statsList = await mapConcurrent(dirents, SCAN_CONCURRENCY, (dirent, i) =>
+      resolveStats(abses[i]!, dirent, options.followSymlinks, onError),
+    );
+
+    for (let i = 0; i < dirents.length; i++) {
+      const stats = statsList[i];
       if (!stats) continue;
+      const abs = abses[i]!;
 
       if (stats.isDirectory()) {
         if (ignore.ignoresDirectory(abs)) continue;
@@ -193,6 +210,29 @@ async function safeReadDir(
     reportIfUnexpected(error, onError);
     return null;
   }
+}
+
+/**
+ * Map `items` through `fn` with at most `limit` calls in flight, preserving
+ * input order in the result. Single-threaded JS makes the `next++` cursor
+ * race-free: there is no `await` between reading and incrementing it.
+ */
+async function mapConcurrent<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  async function worker(): Promise<void> {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]!, i);
+    }
+  }
+  const workers = Math.min(limit, items.length);
+  await Promise.all(Array.from({ length: workers }, () => worker()));
+  return results;
 }
 
 function reportIfUnexpected(error: unknown, onError: (e: Error) => void): void {

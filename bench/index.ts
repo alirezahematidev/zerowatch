@@ -15,9 +15,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { watch } from "../dist/index.js";
 
-const FILES = 5_000;
-const DIRS = 50;
-const EDITS = 1_000;
+// Tree size is overridable so the same script drives both the default and a
+// larger stress run, e.g. BENCH_FILES=10000 BENCH_DIRS=100 node bench/index.ts
+const FILES = Number(process.env.BENCH_FILES) || 5_000;
+const DIRS = Number(process.env.BENCH_DIRS) || 50;
+const EDITS = Number(process.env.BENCH_EDITS) || 1_000;
 
 /** Minimal shape we rely on from any watcher under test. */
 interface BenchWatcher {
